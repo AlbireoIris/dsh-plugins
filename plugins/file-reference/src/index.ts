@@ -19,22 +19,22 @@ export const inject = ['webServer']
 
 /** Deployment-varying knobs, each optional in the cordis.yml row config. */
 export interface FileReferenceConfig {
-  /** Root directories scanned for candidates. Default: home, Desktop, Documents, Downloads. */
-  roots?: string[]
-  /** Subdirectory names never entered (each may be relative or absolute). Default: node_modules, .git, .pnpm-store. */
-  excludeDirs?: string[]
+  /** Root directories scanned (default of [] selects home, Desktop, Documents, Downloads). */
+  roots: string[]
+  /** Subdirectory names never entered (default of [] selects node_modules, .git, .pnpm-store). */
+  excludeDirs: string[]
   /** Maximum directory depth below a root (default 3). */
-  maxDepth?: number
+  maxDepth: number
   /** Maximum candidates returned (default 50). */
-  maxResults?: number
+  maxResults: number
 }
 
-/** Plugin config, validated by schemastery; every field has a default. */
+/** Plugin config, validated by schemastery; empty arrays select the built-in defaults. */
 export const Config: z<FileReferenceConfig> = z.object({
-  roots: z.array(z.string()).optional(),
-  excludeDirs: z.array(z.string()).optional(),
-  maxDepth: z.number().step(1).min(1).max(10).optional(),
-  maxResults: z.number().step(1).min(1).max(200).optional(),
+  roots: z.array(z.string()).default([]),
+  excludeDirs: z.array(z.string()).default([]),
+  maxDepth: z.number().step(1).min(1).max(10).default(3),
+  maxResults: z.number().step(1).min(1).max(200).default(50),
 })
 
 /** One candidate row, serialized for the client. */
@@ -80,13 +80,15 @@ export function apply(ctx: Context, config: FileReferenceConfig): void {
 function resolveConfig(config: FileReferenceConfig): Required<FileReferenceConfig> {
   const home = homedir()
   return {
-    roots: (config.roots !== undefined && config.roots.length > 0
+    roots: (config.roots.length > 0
       ? config.roots
       : [home, join(home, 'Desktop'), join(home, 'Documents'), join(home, 'Downloads')])
       .map(root => root.replace('%USERPROFILE%', home)),
-    excludeDirs: config.excludeDirs ?? ['node_modules', '.git', '.pnpm-store'],
-    maxDepth: config.maxDepth ?? 3,
-    maxResults: config.maxResults ?? 50,
+    excludeDirs: config.excludeDirs.length > 0
+      ? config.excludeDirs
+      : ['node_modules', '.git', '.pnpm-store'],
+    maxDepth: config.maxDepth,
+    maxResults: config.maxResults,
   }
 }
 
