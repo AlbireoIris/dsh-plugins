@@ -74,6 +74,86 @@ export function apply(ctx: Context, config: FileReferenceConfig): void {
       }
     },
   }), 'file-reference: POST /dsh/file-candidates')
+
+  // Sidebar browser data endpoints. list-dir is restricted to the configured
+  // roots so the panel cannot reach arbitrary absolute paths.
+  ctx.effect(() => ctx.webServer.register({
+    kind: 'exact',
+    path: '/dsh/file-roots',
+    handler: async (_req, res) => {
+      respond(res, 200, { roots: cfg.roots })
+    },
+  }), 'file-reference: GET /dsh/file-roots')
+
+  ctx.effect(() => ctx.webServer.register({
+    kind: 'exact',
+    path: '/dsh/list-dir',
+    handler: async (req, res) => {
+      if (req.method !== 'POST') {
+        respond(res, 405, { ok: false, message: 'Use POST' })
+        return
+      }
+      let path = ''
+      try {
+        const body = await readBody(req)
+        const parsed = JSON.parse(body) as { path?: unknown }
+        if (typeof parsed.path === 'string') path = parsed.path
+      } catch {
+        respond(res, 400, { ok: false, message: 'Bad request body' })
+        return
+      }
+      if (!isInsideRoots(path, cfg.roots)) {
+        respond(res, 403, { ok: false, message: 'Path outside configured roots' })
+        return
+      }
+      const entries = listDirectory(path)
+      respond(res, 200, { entries })
+    },
+  }), 'file-reference: POST /dsh/list-dir')
+}
+
+/** Whether an absolute path sits inside one of the configured roots. */
+function isInsideRoots(path: string, roots: readonly string[]): boolean {
+  const normalized = path.toLowerCase()
+  return roots.some(root => {
+    const r = root.toLowerCase()
+    const separator = r.endsWith('\\') || r.endsWith('/') ? '' : '\\'
+    return normalized === r || normalized.startsWith(r + separator)
+  })
+}
+
+/** List one directory's children (no recursion), directories first. */
+function listDirectory(path: string): FileCandidate[] {
+  let entries: string[]
+  try {
+    entries = readdirSync(path)
+  } catch {
+    return []
+  }
+  const out: FileCandidate[] = []
+  for (const name of entries) {
+    const full = join(path, name)
+    let kind: 'file' | 'directory'
+    let size = 0
+    let mtime = 0
+    try {
+      const stat = statSync(full)
+      if (stat.isDirectory()) {
+        kind = 'directory'
+      } else if (stat.isFile()) {
+        kind = 'file'
+        size = stat.size
+        mtime = stat.mtimeMs
+      } else {
+        continue
+      }
+    } catch {
+      continue
+    }
+    out.push({ path: full, name, kind, size, mtime })
+  }
+  out.sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === 'directory' ? -1 : 1))
+  return out
 }
 
 /** Complete the defaults the schema leaves undefined. */

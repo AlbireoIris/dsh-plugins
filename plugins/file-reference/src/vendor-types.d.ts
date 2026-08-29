@@ -21,6 +21,11 @@ declare module '@deepseek-ai/cordis' {
     effect<T>(dispose: () => T, label?: string): T
     /** Optional service read (undefined when the service is not active). */
     get<T>(name: string): T | undefined
+    /** Slot registry service (provided by the web shell). */
+    slots: {
+      inject(name: string, contribute: () => unknown): void
+      register(spec: unknown, component: unknown): () => void
+    }
     /** webServer service (provided by the dsh web host). */
     webServer: {
       register(route: WebRoute): () => void
@@ -91,4 +96,13 @@ declare module '@deepseek-ai/dsh-client-ui-input-trigger/client' {
     ): Promise<readonly InputTriggerCandidate[]>
     onPick(pick: InputTriggerPick): PickOutcome
   }
+}
+
+declare module '@deepseek-ai/dsh-client-ui-slots' {
+  /** Minimal runtime-props share of a root-scope slot (owner facts only). */
+  export type PropsRuntime<K extends string> = { readonly [key in K]: unknown }
+}
+
+declare module '@deepseek-ai/dsh-client-ui-sidebar/client' {
+  // Real package augments the SlotMap; nothing is read here.
 }

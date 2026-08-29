@@ -1,19 +1,28 @@
 /**
- * File-reference browser client half: registers a `@` trigger source that
- * lists local file/directory candidates (queried from the Host scan) and, on
- * pick, inserts the `@path` mention — quoted `@"path with spaces"` when the
- * path contains whitespace, per the shared reference grammar; picking a
- * directory keeps its trailing slash so the user can descend further.
+ * File-reference browser client half, v2: a sidebar "文件" foot action opens a
+ * file-tree panel (host-scanned roots, lazy expansion); picking a file appends
+ * its `@path` mention to the current session's draft through the official
+ * `conversation.input` resolver. The `@` trigger source stays for keystroke
+ * browsing.
  */
 import type { Context } from '@deepseek-ai/cordis'
 // Type-only: pulls the SlotRegistry service merge (ctx.slots) and the
 // conversation header-utilities SlotMap member.
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+// Type-only: pulls the sidebar SlotMap merge (the footer-action hole).
+import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type { InputTriggerSource } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
+import { FileBrowserButton } from './FileBrowserButton.tsx'
 
-/** The Host endpoint answering candidate queries. */
+/** The Host endpoints answering candidate and directory queries. */
 const CANDIDATES_PATH = '/dsh/file-candidates'
+const ROOTS_PATH = '/dsh/file-roots'
+const LIST_DIR_PATH = '/dsh/list-dir'
+
+import type { FileBrowserInjected } from './FileBrowserButton.tsx'
+
+export type { FileBrowserInjected }
 
 /** One candidate row as the Host returns it. */
 export interface FileCandidate {
@@ -24,17 +33,29 @@ export interface FileCandidate {
   readonly mtime: number
 }
 
-export const inject = ['inputTriggers']
+export const inject = ['slots', 'inputTriggers']
 
-/** Register the `@` file candidate source. */
+/** Register the `@` candidate source and the sidebar file-browser action. */
 export function apply(ctx: Context): void {
+  registerAtSource(ctx)
+  ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({
+    name: 'sidebar.footer.action',
+    id: 'file-browser',
+    order: 2,
+    inject: (): FileBrowserInjected => ({
+      rootsPath: ROOTS_PATH,
+      listPath: LIST_DIR_PATH,
+      insertFile: (path, directory) => void insertMention(ctx, path, directory),
+    }),
+  }, FileBrowserButton))
+}
+
+/** Register the `@` file candidate source (keystroke browsing). */
+function registerAtSource(ctx: Context): void {
   const inputTriggers = ctx.get('inputTriggers') as {
     registerSource(source: InputTriggerSource): () => void
   } | undefined
-  if (inputTriggers === undefined) {
-    // The slash pipeline is optional; without it the reference feature is inert.
-    return
-  }
+  if (inputTriggers === undefined) return
   const source: InputTriggerSource = {
     trigger: '@',
     name: 'file',
@@ -67,6 +88,36 @@ export function apply(ctx: Context): void {
     const unregister = inputTriggers.registerSource(source)
     return unregister
   }, 'file-reference: @ source')
+}
+
+/** Minimal session/input service facets (provided by the dsh web shell). */
+interface SessionsFace {
+  list: { getSnapshot(): { current?: string } }
+  scope(id: string): unknown
+}
+interface ConversationInputFace {
+  for(actx: unknown): {
+    setDraft(text: string): void
+    state: { getSnapshot(): { draft: string } }
+  }
+}
+
+/**
+ * Append the selected file's mention to the current session's draft via the
+ * official `conversation.input` resolver. No-op when the services or a
+ * current session are unavailable.
+ */
+function insertMention(ctx: Context, path: string, directory: boolean): void {
+  const sessions = ctx.get('sessions') as SessionsFace | undefined
+  const conversationInput = ctx.get('conversation.input') as ConversationInputFace | undefined
+  if (sessions === undefined || conversationInput === undefined) return
+  const current = sessions.list.getSnapshot().current
+  if (current === undefined) return
+  const actx = sessions.scope(current)
+  const shell = conversationInput.for(actx)
+  const mention = formatMention(path, directory)
+  const draft = shell.state.getSnapshot().draft
+  shell.setDraft(draft === '' ? mention : /(?:^|\s)$/u.test(draft) ? draft + mention : draft + ' ' + mention)
 }
 
 /**
