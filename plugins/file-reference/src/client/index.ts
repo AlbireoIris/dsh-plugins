@@ -10,7 +10,7 @@ import type { Context } from '@deepseek-ai/cordis'
 // conversation header-utilities SlotMap member.
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { InputTriggerSource } from './input-trigger-types.ts'
+import type { InputTriggerSource } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 
 /** The Host endpoint answering candidate queries. */
 const CANDIDATES_PATH = '/dsh/file-candidates'

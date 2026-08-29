@@ -9,6 +9,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { ServerResponse } from 'node:http'
 import type { Context } from '@deepseek-ai/cordis'
+import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 
 export const name = 'file-reference'
@@ -28,6 +29,14 @@ export interface FileReferenceConfig {
   maxResults?: number
 }
 
+/** Plugin config, validated by schemastery; every field has a default. */
+export const Config: z<FileReferenceConfig> = z.object({
+  roots: z.array(z.string()).optional(),
+  excludeDirs: z.array(z.string()).optional(),
+  maxDepth: z.number().step(1).min(1).max(10).optional(),
+  maxResults: z.number().step(1).min(1).max(200).optional(),
+})
+
 /** One candidate row, serialized for the client. */
 export interface FileCandidate {
   /** Absolute filesystem path. */
@@ -39,8 +48,8 @@ export interface FileCandidate {
   readonly mtime: number
 }
 
-export function apply(ctx: Context): void {
-  const config = resolveConfig(ctx)
+export function apply(ctx: Context, config: FileReferenceConfig): void {
+  const cfg = resolveConfig(config)
   ctx.effect(() => ctx.webServer.register({
     kind: 'exact',
     path: '/dsh/file-candidates',
@@ -58,7 +67,7 @@ export function apply(ctx: Context): void {
         // Empty query is valid; a malformed body is treated as empty too.
       }
       try {
-        const candidates = scanCandidates(config, query)
+        const candidates = scanCandidates(cfg, query)
         respond(res, 200, { candidates })
       } catch (error) {
         respond(res, 500, { ok: false, message: String(error instanceof Error ? error.message : error) })
@@ -67,22 +76,17 @@ export function apply(ctx: Context): void {
   }), 'file-reference: POST /dsh/file-candidates')
 }
 
-/** Merge row config over the defaults. */
-function resolveConfig(ctx: Context): Required<FileReferenceConfig> {
-  const overrides = (ctx.config ?? {}) as Partial<FileReferenceConfig>
+/** Complete the defaults the schema leaves undefined. */
+function resolveConfig(config: FileReferenceConfig): Required<FileReferenceConfig> {
   const home = homedir()
-  const defaults = {
-    roots: [home, join(home, 'Desktop'), join(home, 'Documents'), join(home, 'Downloads')],
-    excludeDirs: ['node_modules', '.git', '.pnpm-store'],
-    maxDepth: 3,
-    maxResults: 50,
-  }
   return {
-    roots: (overrides.roots && overrides.roots.length > 0 ? overrides.roots : defaults.roots)
-      .map(root => (root.includes('%USERPROFILE%') ? root.replace('%USERPROFILE%', home) : root)),
-    excludeDirs: overrides.excludeDirs ?? defaults.excludeDirs,
-    maxDepth: overrides.maxDepth ?? defaults.maxDepth,
-    maxResults: overrides.maxResults ?? defaults.maxResults,
+    roots: (config.roots !== undefined && config.roots.length > 0
+      ? config.roots
+      : [home, join(home, 'Desktop'), join(home, 'Documents'), join(home, 'Downloads')])
+      .map(root => root.replace('%USERPROFILE%', home)),
+    excludeDirs: config.excludeDirs ?? ['node_modules', '.git', '.pnpm-store'],
+    maxDepth: config.maxDepth ?? 3,
+    maxResults: config.maxResults ?? 50,
   }
 }
 

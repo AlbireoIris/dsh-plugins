@@ -20,8 +20,10 @@ export default defineConfig([
     dts: false,
     clean: false,
     deps: {
-      neverBundle: (specifier) => isBuiltin(specifier),
-      alwaysBundle: (specifier) => !isBuiltin(specifier),
+      neverBundle: (specifier) => isBuiltin(specifier)
+        || specifier === '@deepseek-ai/schemastery' || specifier === '@deepseek-ai/cordis',
+      alwaysBundle: (specifier) => !isBuiltin(specifier)
+        && specifier !== '@deepseek-ai/schemastery' && specifier !== '@deepseek-ai/cordis',
     },
   },
   {
