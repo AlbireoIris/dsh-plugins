@@ -1,0 +1,9 @@
+{
+  "name": "dsh-plugins",
+  "private": true,
+  "description": "Personal plugin collection for DeepSeek Harness (dsh web)",
+  "scripts": {
+    "build": "pnpm -r run build",
+    "typecheck": "pnpm -r exec tsc -b --force"
+  }
+}
