@@ -36,6 +36,10 @@ export default defineConfig([
     dts: false,
     sourcemap: true,
     clean: false,
+    deps: {
+      neverBundle: (specifier) => specifier === "react" || specifier === "react/jsx-runtime",
+      alwaysBundle: (specifier) => specifier !== "react" && specifier !== "react/jsx-runtime",
+    },
     outputOptions: {
       entryFileNames: 'client.js',
       banner: `window.__ModuleLoader__.load({ id: ${JSON.stringify(id)}, factory: (require) => {`,
