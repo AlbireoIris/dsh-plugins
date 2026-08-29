@@ -8,6 +8,18 @@ importers:
 
   .: {}
 
+  plugins/file-reference:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.1
+      tsdown:
+        specifier: ^0.22.2
+        version: 0.22.14(typescript@5.9.3)
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
   plugins/restart-harness:
     devDependencies:
       '@types/node':
