@@ -3,8 +3,16 @@
  * drive roots and one-level shell-like tab completion across every disk.
  * Read-only listing; every request is cap-bounded. No roots whitelist: the
  * whole machine is the point (loopback + same-origin trust).
+ *
+ * Volume labels ride a wscript/VBS helper (FileSystemObject Drives ->
+ * VolumeName): native in-process calls (koffi/GetVolumeInformationW)
+ * crashed the host process on this machine, and the wscript subprocess is
+ * the proven carrier that can never take the host down.
  */
-import { readdirSync, statSync } from 'node:fs'
+import { readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { spawn } from 'node:child_process'
 import type { ServerResponse } from 'node:http'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-host-webserver'
@@ -22,7 +30,7 @@ export interface FileCandidate {
   readonly path: string
   readonly name: string
   readonly kind: 'file' | 'directory'
-  /** Windows volume label, drives only. */
+  /** Windows volume label, drives only; shown on the initial `@` list. */
   readonly label: string | undefined
 }
 
@@ -55,8 +63,8 @@ export function apply(ctx: Context): void {
 
 /**
  * Shell-like tab completion, one level at a time:
- * - ''                -> all drive roots
- * - 'C:'              -> the C:\ root (when it exists)
+ * - ''                -> all drive roots (volume labels shown)
+ * - 'C:'              -> the C:\ root (label suppressed)
  * - 'C:\'             -> C:\ direct children (dirs first)
  * - 'C:\Us'           -> 'Us'-matching children of C:\ (segment contains, case-insensitive)
  */
@@ -84,7 +92,7 @@ async function listCandidates(query: string): Promise<FileCandidate[]> {
   return children.filter(child => child.name.toLowerCase().includes(segment))
 }
 
-/** Enumerate every existing drive root (A:-Z:). */
+/** Enumerate every existing drive root (A:-Z:), optionally with labels. */
 async function drives(includeLabels: boolean): Promise<FileCandidate[]> {
   const labels = includeLabels ? await readVolumeLabels() : {}
   const out: FileCandidate[] = []
@@ -99,40 +107,66 @@ async function drives(includeLabels: boolean): Promise<FileCandidate[]> {
 let labelCache: { at: number; labels: Record<string, string> } | null = null
 
 /**
- * Read volume labels through GetVolumeInformationW (koffi -> kernel32).
- * Lazy-imported so non-Windows hosts never load koffi; any failure degrades
- * to an empty label map (drives still list without names).
+ * Read volume labels through a wscript/VBS helper (FileSystemObject Drives
+ * -> VolumeName). Any failure degrades to an empty label map (drives still
+ * list without names).
  */
 async function readVolumeLabels(): Promise<Record<string, string>> {
   if (labelCache !== null && Date.now() - labelCache.at < 5 * 60 * 1000) return labelCache.labels
+  const dir = tmpdir()
+  const vbsPath = join(dir, `dsh-labels-${process.pid}.vbs`)
+  const outPath = join(dir, `dsh-labels-${process.pid}.txt`)
+  try { unlinkSync(outPath) } catch { /* absent: fine */ }
+  const body = [
+    'Option Explicit',
+    'On Error Resume Next',
+    'Dim fso, d, f',
+    'Set fso = CreateObject("Scripting.FileSystemObject")',
+    'Set f = fso.CreateTextFile("' + outPath.replace(/\\/gu, '\\\\') + '", True)',
+    'For Each d In fso.Drives',
+    '  If d.DriveType = 2 Or d.DriveType = 3 Then',
+    '    If d.IsReady Then',
+    '      If Len(d.VolumeName) > 0 Then f.WriteLine CStr(d.DriveLetter) & "=" & d.VolumeName',
+    '    End If',
+    '  End If',
+    'Next',
+    'f.Close',
+  ].join('\r\n')
   try {
-    const koffi = (await import('koffi')).default as unknown as {
-      load(path: string): { func(convention: string, name: string, result: string, args: string[]): (...args: unknown[]) => unknown }
-      alloc(type: string, length: number): unknown
-      decode(ptr: unknown, type: string): unknown
-    }
-    const kernel32 = koffi.load('kernel32.dll')
-    const probe = kernel32.func('__stdcall', 'GetVolumeInformationW', 'bool', [
-      'str16', 'void *', 'uint', 'void *', 'void *', 'void *', 'void *', 'uint',
-    ])
-    const labels: Record<string, string> = {}
-    for (let code = 'A'.charCodeAt(0); code <= 'Z'.charCodeAt(0); code++) {
-      const root = String.fromCharCode(code) + ':\\'
-      if (!existsDir(root)) continue
-      const nameBuf = koffi.alloc('char', 512)
-      const fsBuf = koffi.alloc('char', 128)
-      const ok = probe(root, nameBuf, 256, null, null, null, fsBuf, 128)
-      if (ok === true) {
-        const label = koffi.decode(nameBuf, 'str16') as unknown
-        if (typeof label === 'string' && label.trim() !== '') labels[root] = label.trim()
-      }
-    }
-    labelCache = { at: Date.now(), labels }
-    return labels
+    writeFileSync(vbsPath, body, 'utf8')
+    await runWscript(vbsPath, 4000)
   } catch {
     labelCache = { at: Date.now(), labels: {} }
     return {}
   }
+  const labels: Record<string, string> = {}
+  try {
+    const text = readFileSync(outPath, 'utf8')
+    for (const line of text.split(/\r?\n/u)) {
+      const at = line.indexOf('=')
+      if (at === 1) labels[line.slice(0, 1).toUpperCase() + ':\\'] = line.slice(at + 1).trim()
+    }
+  } catch {
+    // Output file missing: no labels.
+  }
+  labelCache = { at: Date.now(), labels }
+  return labels
+}
+
+/** Run one wscript helper and resolve on exit (or after the timeout). */
+function runWscript(vbsPath: string, timeoutMs: number): Promise<void> {
+  return new Promise(resolve => {
+    const child = spawn('wscript.exe', ['//nologo', vbsPath], {
+      windowsHide: true,
+      stdio: 'ignore',
+    })
+    const timer = setTimeout(() => {
+      try { child.kill() } catch { /* already gone */ }
+      resolve()
+    }, timeoutMs)
+    child.on('exit', () => { clearTimeout(timer); resolve() })
+    child.on('error', () => { clearTimeout(timer); resolve() })
+  })
 }
 
 function existsDir(path: string): boolean {
@@ -161,7 +195,6 @@ function listDirectory(path: string): FileCandidate[] {
     } catch {
       continue
     }
-    if (kind === 'file' && out.length >= MAX_RESULTS) continue
     out.push({ path: full, name, kind, label: undefined })
   }
   out.sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === 'directory' ? -1 : 1))
