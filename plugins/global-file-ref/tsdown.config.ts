@@ -20,8 +20,8 @@ export default defineConfig([
     dts: false,
     clean: false,
     deps: {
-      neverBundle: (specifier) => isBuiltin(specifier),
-      alwaysBundle: (specifier) => !isBuiltin(specifier),
+      neverBundle: (specifier) => isBuiltin(specifier) || specifier === 'koffi',
+      alwaysBundle: (specifier) => !isBuiltin(specifier) && specifier !== 'koffi',
     },
   },
   {

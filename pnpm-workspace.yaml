@@ -1,4 +1,7 @@
 packages:
   - "plugins/*"
 
+allowBuilds:
+  koffi: true
+
 storeDir: H:/deepseek-harness/.pnpm-store

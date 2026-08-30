@@ -22,6 +22,8 @@ export interface FileCandidate {
   readonly path: string
   readonly name: string
   readonly kind: 'file' | 'directory'
+  /** Windows volume label, drives only. */
+  readonly label?: string
 }
 
 export function apply(ctx: Context): void {
@@ -42,7 +44,7 @@ export function apply(ctx: Context): void {
         // Empty query is valid; a malformed body is treated as empty too.
       }
       try {
-        const candidates = listCandidates(query)
+        const candidates = await listCandidates(query)
         respond(res, 200, { candidates })
       } catch (error) {
         respond(res, 500, { ok: false, message: String(error instanceof Error ? error.message : error) })
@@ -58,13 +60,13 @@ export function apply(ctx: Context): void {
  * - 'C:\'             -> C:\ direct children (dirs first)
  * - 'C:\Us'           -> 'Us'-matching children of C:\ (segment contains, case-insensitive)
  */
-function listCandidates(query: string): FileCandidate[] {
+async function listCandidates(query: string): Promise<FileCandidate[]> {
   const normalized = query.replace(/\//gu, '\\')
-  if (normalized === '') return drives()
+  if (normalized === '') return await drives()
 
   if (/^[a-zA-Z]:$/u.test(normalized)) {
     const root = normalized.toUpperCase() + '\\'
-    return existsDir(root) ? [{ path: root, name: root, kind: 'directory' }] : []
+    return existsDir(root) ? [{ path: root, name: root, kind: 'directory', label: (await readVolumeLabels())[root] }] : []
   }
 
   const lastSep = normalized.lastIndexOf('\\')
@@ -73,7 +75,7 @@ function listCandidates(query: string): FileCandidate[] {
 
   if (base === '') {
     // 'c' / 'use'-style queries: complete against the drive letters.
-    return drives().filter(drive => drive.path.toLowerCase().includes(segment))
+    return (await drives()).filter(drive => drive.path.toLowerCase().includes(segment))
   }
   if (!existsDir(base)) return []
 
@@ -83,13 +85,54 @@ function listCandidates(query: string): FileCandidate[] {
 }
 
 /** Enumerate every existing drive root (A:-Z:). */
-function drives(): FileCandidate[] {
+async function drives(): Promise<FileCandidate[]> {
+  const labels = await readVolumeLabels()
   const out: FileCandidate[] = []
   for (let code = 'A'.charCodeAt(0); code <= 'Z'.charCodeAt(0); code++) {
     const root = String.fromCharCode(code) + ':\\'
-    if (existsDir(root)) out.push({ path: root, name: root, kind: 'directory' })
+    if (existsDir(root)) out.push({ path: root, name: root, kind: 'directory', label: labels[root] })
   }
   return out
+}
+
+/** Volume-label cache (5-minute TTL; labels change rarely). */
+let labelCache: { at: number; labels: Record<string, string> } | null = null
+
+/**
+ * Read volume labels through GetVolumeInformationW (koffi -> kernel32).
+ * Lazy-imported so non-Windows hosts never load koffi; any failure degrades
+ * to an empty label map (drives still list without names).
+ */
+async function readVolumeLabels(): Promise<Record<string, string>> {
+  if (labelCache !== null && Date.now() - labelCache.at < 5 * 60 * 1000) return labelCache.labels
+  try {
+    const koffi = (await import('koffi')).default as unknown as {
+      load(path: string): { func(convention: string, name: string, result: string, args: string[]): (...args: unknown[]) => unknown }
+      alloc(type: string, length: number): unknown
+      decode(ptr: unknown, type: string): unknown
+    }
+    const kernel32 = koffi.load('kernel32.dll')
+    const probe = kernel32.func('__stdcall', 'GetVolumeInformationW', 'bool', [
+      'str16', 'void *', 'uint', 'void *', 'void *', 'void *', 'void *', 'uint',
+    ])
+    const labels: Record<string, string> = {}
+    for (let code = 'A'.charCodeAt(0); code <= 'Z'.charCodeAt(0); code++) {
+      const root = String.fromCharCode(code) + ':\\'
+      if (!existsDir(root)) continue
+      const nameBuf = koffi.alloc('char', 512)
+      const fsBuf = koffi.alloc('char', 128)
+      const ok = probe(root, nameBuf, 256, null, null, null, fsBuf, 128)
+      if (ok === true) {
+        const label = koffi.decode(nameBuf, 'str16') as unknown
+        if (typeof label === 'string' && label.trim() !== '') labels[root] = label.trim()
+      }
+    }
+    labelCache = { at: Date.now(), labels }
+    return labels
+  } catch {
+    labelCache = { at: Date.now(), labels: {} }
+    return {}
+  }
 }
 
 function existsDir(path: string): boolean {
