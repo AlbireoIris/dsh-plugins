@@ -1,7 +1,8 @@
 # session-clear
 
-`/clear` 命令（Claude Code 风格）：只保留会话最近的 N 轮对话（默认 10 轮），
-更早的历史从**持久会话日志**中截断（含备份），命令自动出现在 `/` 命令菜单。
+`/clear` 命令（Claude Code 风格）：把会话里最近 N 轮（默认 10 轮）**之外**的
+旧对话折叠成一条清理标记，模型上下文立刻变小、继续对话不受影响，命令自动
+出现在 `/` 命令菜单。
 
 ## 用法
 
@@ -11,23 +12,25 @@
 ```yaml
 - id: session-clear
   name: '@deepseek-ai/dsh-session-clear'
-  inject: [commands]
+  inject: [commands, tokenMeter, sessions]
   config:
     keepTurns: 10        # 保留最近几轮（1-50，默认 10）
-    logRoot: 'C:\Users\Iris\.dsh\sessions'
 ```
 
 ## 工作原理
 
 - 通过官方命令注册表（`ctx.commands.register`）定义 `/clear`，UI 自动发现
-- 处理时：`scanLog` 解码该会话的 zstd JSONL 日志 → 按 `turn/start` 边界
-  定位最近 N 轮 → 同一 header + 事件重编码（单帧 zstd）→ **先校验暂存文件**
-  （事件数一致）→ 原子替换（原文件留 `.clear-bak` 备份）
-- 校验失败则中止，原文件不动；轮数已少于上限时提示无需清理
+- 走 harness 官方的 compaction 表面事务：`compaction/start` →
+  `compaction/summary` → 检查点 `user/message`（`surfaceOp: replace` 替换旧范围）
+  → `compaction/end`，持久日志保持 append-only、连续无断档
+- 边界按 **turn 序号** 在表面节点上定位（compaction 检查点会让可见 seq 非单调，
+  不能按数值比较）；范围两侧要求工具调用对平衡，否则中止并保留原会话
+- 检查点用**确定性摘要**（"此前对话已通过 /clear 清理"），不调 LLM、即时完成；
+  更早的历史不在日志中删除，但模型上下文从检查点之后开始
 
 ## 注意
 
-- 截断的是持久日志（重启/复现/后续轮次都从截断后开始）；当前进程内的上下文不
-  会被立刻丢弃——要彻底生效可在 `/clear` 后重启会话/刷新页面。
-- 备份文件 `session.jsonl.zstd.clear-bak` 保留在会话目录（下次 `/clear` 前
-  手动删除即可；也可随时从备份恢复）。
+- 只影响模型上下文（surface），持久日志保持不变——这是官方 compaction 的
+  语义，绝不损坏会话文件；如需彻底删除日志旧内容，可用会话导出/备份后另行处理
+- 会话正忙（已有折叠任务在进行）或旧历史边界与工具调用对不平衡时会中止，
+  稍后重试即可
