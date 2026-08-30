@@ -159,14 +159,15 @@ async function clearNow(
     end,
     agent,
     {
-      owner: 'current-turn',
+      // A human command runs while the agent is IDLE (no open turn): the
+      // standalone manual-compaction bracket, exactly the /compact path.
+      owner: null,
       stability: 'whole-surface',
       ...commandId === undefined ? {} : { sourceCommandId: commandId },
+      flush: async () => { await ctx.sessions.flush(session) },
     },
     signal,
   )
-  const sessions = ctx.sessions
-  await sessions.flush(session)
   return {
     kind: 'success',
     text: `已清理：保留最近 ${keepTurns} 轮，更早的 ${result.shadowedSeqs.length} 条消息已折叠为一条清理标记。`,
