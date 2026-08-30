@@ -4,7 +4,7 @@
  * matching files/directories so the browser can pick one and insert the
  * `@path` mention. Loopback-only; the client owns all presentation.
  */
-import { readdirSync, renameSync, rmSync, statSync } from 'node:fs'
+import { readFileSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, dirname } from 'node:path'
 import type { ServerResponse } from 'node:http'
@@ -185,8 +185,69 @@ export function apply(ctx: Context, config: FileReferenceConfig): void {
       }
     },
   }), 'file-reference: POST /dsh/delete-path')
+
+
+  // Read one file's bytes (base64) for the client's image smart-routing
+  // (official draft attachment rail). Capped; larger files fall back to
+  // the @path text on the client.
+  ctx.effect(() => ctx.webServer.register({
+    kind: 'exact',
+    path: '/dsh/read-file',
+    handler: async (req, res) => {
+      if (req.method !== 'POST') {
+        respond(res, 405, { ok: false, message: 'Use POST' })
+        return
+      }
+      const path = await readPath(req)
+      if (path === null || !isInsideRoots(path, cfg.roots)) {
+        respond(res, 403, { ok: false, message: 'Path outside configured roots' })
+        return
+      }
+      try {
+        const stat = statSync(path)
+        if (!stat.isFile()) {
+          respond(res, 400, { ok: false, message: 'Not a file' })
+          return
+        }
+        if (stat.size > MAX_READ_BYTES) {
+          respond(res, 413, { ok: false, message: 'File too large' })
+          return
+        }
+        const bytes = readFileSync(path)
+        respond(res, 200, {
+          ok: true,
+          name: baseName(path),
+          mime: mimeFor(path),
+          base64: bytes.toString('base64'),
+        })
+      } catch (error) {
+        respond(res, 500, { ok: false, message: String(error instanceof Error ? error.message : error) })
+      }
+    },
+  }), 'file-reference: POST /dsh/read-file')}
+
+
+/** Base64 read cap for the client attachment fallback (20 MiB). */
+const MAX_READ_BYTES = 20 * 1024 * 1024
+
+/** Best-effort MIME by extension (only image families are actually used). */
+function mimeFor(path: string): string {
+  const ext = path.slice(path.lastIndexOf('.') + 1).toLowerCase()
+  if (ext === 'png') return 'image/png'
+  if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg'
+  if (ext === 'webp') return 'image/webp'
+  if (ext === 'gif') return 'image/gif'
+  return ext === 'txt' ? 'text/plain' : 'application/octet-stream'
 }
 
+/** Base name helper (server side, no browser assumptions). */
+function baseName(path: string): string {
+  const trimmed = path.replace(/[\\/]+$/u, '')
+  const atSlash = trimmed.lastIndexOf('/')
+  const atBack = trimmed.lastIndexOf('\\')
+  const at = Math.max(atSlash, atBack)
+  return at >= 0 ? trimmed.slice(at + 1) : trimmed
+}
 /** Read '{ path }' from a POST body; null when absent or malformed. */
 async function readPath(req: import('node:http').IncomingMessage): Promise<string | null> {
   try {

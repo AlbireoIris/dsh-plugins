@@ -106,3 +106,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 declare module '@deepseek-ai/dsh-client-ui-sidebar/client' {
   // Real package augments the SlotMap; nothing is read here.
 }
+
+declare module '@deepseek-ai/dsh-client-ui-chat/client' {
+  // Real package augments the SlotMap; nothing is read here.
+}

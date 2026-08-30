@@ -4,7 +4,11 @@
  * mirrors ClaudeMate's floating panel (rounded-xl, subtle border hover,
  * glass blur, row actions on hover).
  */
-export const cssText = '.dsh-files-foot{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;' +
+export const cssText = '.dsh-files-composer{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border:0;background:transparent;border-radius:6px;cursor:pointer;color:var(--dsw-alias-label-secondary)}' +
+  '.dsh-files-composer:hover{background:var(--dsw-alias-interactive-bg-hover)}' +
+  '.dsh-files-composer-on{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}' +
+  '.dsh-files-composer-icon{font-size:15px;line-height:1}' +
+  '.dsh-files-foot{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;' +
   'border:1px solid var(--dsw-alias-border-l2);border-radius:14px;background:transparent;cursor:pointer;' +
   'color:var(--dsw-alias-label-primary);font-family:var(--dsw-font-family);font-size:12px;white-space:nowrap}' +
   '.dsh-files-foot:hover{background:var(--dsw-alias-interactive-bg-hover)}' +

@@ -5,10 +5,11 @@
  * goes through the Host file endpoints; picks insert the `@path` mention
  * into the current session's draft.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useSyncExternalStore, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { cssText } from './css-text.ts'
+import { panelOpen, subscribePanel, togglePanel } from './panel-store.ts'
 
 /** Inject face: endpoint paths plus the Host-backed operations. */
 export interface FileBrowserInjected {
@@ -45,7 +46,7 @@ interface ChildrenState {
 const FAVORITES_KEY = 'dsh-file-favorites'
 
 export function FileBrowserButton(props: FileBrowserProps): JSX.Element {
-  const [open, setOpen] = useState(false)
+  const open = useSyncExternalStore(subscribePanel, panelOpen)
   const [favorites, setFavorites] = useState<Favorite[]>([])
   const [seeded, setSeeded] = useState(false)
   const [expanded, setExpanded] = useState<ChildrenState | null>(null)
@@ -159,7 +160,7 @@ export function FileBrowserButton(props: FileBrowserProps): JSX.Element {
 
   return (
     <>
-      <button type="button" className="dsh-files-foot" onClick={() => setOpen(value => !value)}>
+      <button type="button" className="dsh-files-foot" onClick={togglePanel}>
         <span className="dsh-files-foot-icon">📁</span>
         <span>文件</span>
       </button>
@@ -167,7 +168,7 @@ export function FileBrowserButton(props: FileBrowserProps): JSX.Element {
         <div className="dsh-files-panel" role="dialog" aria-label="文件浏览器">
           <div className="dsh-files-panel-head">
             <span>文件浏览器</span>
-            <button type="button" className="dsh-files-close" onClick={() => setOpen(false)}>×</button>
+            <button type="button" className="dsh-files-close" onClick={togglePanel}>×</button>
           </div>
           <div className="dsh-files-tree">
             {favorites.map((favorite) => (
