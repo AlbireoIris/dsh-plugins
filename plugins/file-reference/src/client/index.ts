@@ -46,6 +46,15 @@ export function apply(ctx: Context): void {
       rootsPath: ROOTS_PATH,
       listPath: LIST_DIR_PATH,
       insertFile: (path, directory) => void insertMention(ctx, path, directory),
+      openPath: (path) => void post('/dsh/open-path', { path }),
+      renamePath: async (path, newName) => {
+        const response = await post('/dsh/rename-path', { path, newName })
+        return response.ok
+      },
+      deletePath: async (path) => {
+        const response = await post('/dsh/delete-path', { path })
+        return response.ok
+      },
     }),
   }, FileBrowserButton))
 }
@@ -125,6 +134,16 @@ function insertMention(ctx: Context, path: string, directory: boolean): void {
  * `@"path"` grammar; a directory keeps that quote open after its trailing
  * slash so completion can descend another level.
  */
+
+/** POST JSON to one host endpoint (loopback, keep-alive error-tolerant). */
+async function post(path: string, body: unknown): Promise<Response> {
+  return await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }).catch(() => new Response(null, { status: 0 }))
+}
+
 function formatMention(path: string, directory: boolean): string {
   if (/[\u0000-\u001f\u007f-\u009f"]/u.test(path)) return `@${path}`
   if (directory) {

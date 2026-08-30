@@ -4,12 +4,13 @@
  * matching files/directories so the browser can pick one and insert the
  * `@path` mention. Loopback-only; the client owns all presentation.
  */
-import { readdirSync, statSync } from 'node:fs'
+import { readdirSync, renameSync, rmSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { join, dirname } from 'node:path'
 import type { ServerResponse } from 'node:http'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
+import { spawn } from 'node:child_process'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 
 export const name = 'file-reference'
@@ -110,8 +111,100 @@ export function apply(ctx: Context, config: FileReferenceConfig): void {
       respond(res, 200, { entries })
     },
   }), 'file-reference: POST /dsh/list-dir')
+
+  // File operations (NAVI-aligned context menu). Every one is restricted to
+  // the configured roots; identity operations never touch a root itself.
+  ctx.effect(() => ctx.webServer.register({
+    kind: 'exact',
+    path: '/dsh/open-path',
+    handler: async (req, res) => {
+      if (req.method !== 'POST') {
+        respond(res, 405, { ok: false, message: 'Use POST' })
+        return
+      }
+      const path = await readPath(req)
+      if (path === null || !isInsideRoots(path, cfg.roots)) {
+        respond(res, 403, { ok: false, message: 'Path outside configured roots' })
+        return
+      }
+      // explorer.exe is GUI-subsystem: it survives even where detached
+      // console children die (the machine-proven carrier rule).
+      const child = spawn('explorer.exe', [path], { detached: true, stdio: 'ignore', windowsHide: true })
+      child.unref()
+      respond(res, 200, { ok: true })
+    },
+  }), 'file-reference: POST /dsh/open-path')
+
+  ctx.effect(() => ctx.webServer.register({
+    kind: 'exact',
+    path: '/dsh/rename-path',
+    handler: async (req, res) => {
+      if (req.method !== 'POST') {
+        respond(res, 405, { ok: false, message: 'Use POST' })
+        return
+      }
+      let path = ''
+      let newName = ''
+      try {
+        const parsed = JSON.parse(await readBody(req)) as { path?: unknown; newName?: unknown }
+        if (typeof parsed.path === 'string') path = parsed.path
+        if (typeof parsed.newName === 'string') newName = parsed.newName.trim()
+      } catch { /* fallthrough to the guard */ }
+      if (path === '' || newName === '' || !isChildOf(path, cfg.roots)) {
+        respond(res, 400, { ok: false, message: 'Bad request' })
+        return
+      }
+      try {
+        const target = join(dirname(path), newName)
+        renameSync(path, target)
+        respond(res, 200, { ok: true, path: target })
+      } catch (error) {
+        respond(res, 500, { ok: false, message: String(error instanceof Error ? error.message : error) })
+      }
+    },
+  }), 'file-reference: POST /dsh/rename-path')
+
+  ctx.effect(() => ctx.webServer.register({
+    kind: 'exact',
+    path: '/dsh/delete-path',
+    handler: async (req, res) => {
+      if (req.method !== 'POST') {
+        respond(res, 405, { ok: false, message: 'Use POST' })
+        return
+      }
+      const path = await readPath(req)
+      if (path === null || !isChildOf(path, cfg.roots)) {
+        respond(res, 403, { ok: false, message: 'Path outside configured roots' })
+        return
+      }
+      try {
+        rmSync(path, { recursive: true, force: false })
+        respond(res, 200, { ok: true })
+      } catch (error) {
+        respond(res, 500, { ok: false, message: String(error instanceof Error ? error.message : error) })
+      }
+    },
+  }), 'file-reference: POST /dsh/delete-path')
 }
 
+/** Read '{ path }' from a POST body; null when absent or malformed. */
+async function readPath(req: import('node:http').IncomingMessage): Promise<string | null> {
+  try {
+    const parsed = JSON.parse(await readBody(req)) as { path?: unknown }
+    return typeof parsed.path === 'string' && parsed.path !== '' ? parsed.path : null
+  } catch {
+    return null
+  }
+}
+
+/** Whether an absolute path is a child (not the root itself) of one root. */
+function isChildOf(path: string, roots: readonly string[]): boolean {
+  const normalized = path.toLowerCase()
+  return roots.some(root => {
+    const r = root.toLowerCase()
+    return normalized.startsWith(r.endsWith('\\') || r.endsWith('/') ? r : r + '\\')
+  })
+}
 /** Whether an absolute path sits inside one of the configured roots. */
 function isInsideRoots(path: string, roots: readonly string[]): boolean {
   const normalized = path.toLowerCase()
