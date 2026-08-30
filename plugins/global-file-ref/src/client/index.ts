@@ -110,9 +110,11 @@ function rememberPick(pick: RecentPick): void {
  * open after its trailing slash so completion can descend another level.
  */
 function formatMention(path: string, directory: boolean): string {
-  if (/[\u0000-\u001f\u007f-\u009f"]/u.test(path)) return `@${path}`
-  if (directory) {
-    return path.includes(' ') ? `@"${path}/` : `@${path}/`
-  }
-  return path.includes(' ') ? `@"${path}"` : `@${path}`
+  if (/[\u0000-\u001f\u007f-\u009f"]/u.test(path)) return `@${path} `
+  const body = directory
+    ? (path.includes(' ') ? `@"${path}/"` : `@${path}/`)
+    : (path.includes(' ') ? `@"${path}"` : `@${path}`)
+  // Trailing space terminates the @ token: the pipeline re-tracks at the
+  // caret and an open token would keep reopening the completion menu.
+  return body + ' '
 }
