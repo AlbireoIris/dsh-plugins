@@ -19,7 +19,6 @@ export interface FileCandidate {
   readonly path: string
   readonly name: string
   readonly kind: 'file' | 'directory'
-  readonly label?: string
 }
 
 export const inject = ['inputTriggers']
@@ -49,9 +48,7 @@ export function apply(ctx: Context): void {
           const body = await response.json() as { candidates?: FileCandidate[] }
           rows = (body.candidates ?? []).map(candidate => ({
             name: candidate.name,
-            description: typeof candidate.label === 'string' && candidate.label !== ''
-              ? `${candidate.path} · ${candidate.label}`
-              : candidate.path,
+            description: candidate.path,
             icon: candidate.kind === 'directory' ? 'folder' as const : 'file' as const,
             value: candidate.path,
           }))

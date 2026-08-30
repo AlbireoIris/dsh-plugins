@@ -3,16 +3,8 @@
  * drive roots and one-level shell-like tab completion across every disk.
  * Read-only listing; every request is cap-bounded. No roots whitelist: the
  * whole machine is the point (loopback + same-origin trust).
- *
- * Volume labels ride a wscript/VBS helper (FileSystemObject Drives ->
- * VolumeName): native in-process calls (koffi/GetVolumeInformationW)
- * crashed the host process on this machine, and the wscript subprocess is
- * the proven carrier that can never take the host down.
  */
-import { readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { spawn } from 'node:child_process'
+import { readdirSync, statSync } from 'node:fs'
 import type { ServerResponse } from 'node:http'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-host-webserver'
@@ -30,8 +22,6 @@ export interface FileCandidate {
   readonly path: string
   readonly name: string
   readonly kind: 'file' | 'directory'
-  /** Windows volume label, drives only; shown on the initial `@` list. */
-  readonly label: string | undefined
 }
 
 export function apply(ctx: Context): void {
@@ -52,7 +42,7 @@ export function apply(ctx: Context): void {
         // Empty query is valid; a malformed body is treated as empty too.
       }
       try {
-        const candidates = await listCandidates(query)
+        const candidates = listCandidates(query)
         respond(res, 200, { candidates })
       } catch (error) {
         respond(res, 500, { ok: false, message: String(error instanceof Error ? error.message : error) })
@@ -63,18 +53,18 @@ export function apply(ctx: Context): void {
 
 /**
  * Shell-like tab completion, one level at a time:
- * - ''                -> all drive roots (volume labels shown)
- * - 'C:'              -> the C:\ root (label suppressed)
+ * - ''                -> all drive roots
+ * - 'C:'              -> the C:\ root
  * - 'C:\'             -> C:\ direct children (dirs first)
  * - 'C:\Us'           -> 'Us'-matching children of C:\ (segment contains, case-insensitive)
  */
-async function listCandidates(query: string): Promise<FileCandidate[]> {
+function listCandidates(query: string): FileCandidate[] {
   const normalized = query.replace(/\//gu, '\\')
-  if (normalized === '') return await drives(true)
+  if (normalized === '') return drives()
 
   if (/^[a-zA-Z]:$/u.test(normalized)) {
     const root = normalized.toUpperCase() + '\\'
-    return existsDir(root) ? [{ path: root, name: root, kind: 'directory', label: undefined }] : []
+    return existsDir(root) ? [{ path: root, name: root, kind: 'directory' }] : []
   }
 
   const lastSep = normalized.lastIndexOf('\\')
@@ -83,7 +73,7 @@ async function listCandidates(query: string): Promise<FileCandidate[]> {
 
   if (base === '') {
     // 'c' / 'use'-style queries: complete against the drive letters.
-    return (await drives(false)).filter(drive => drive.path.toLowerCase().includes(segment))
+    return drives().filter(drive => drive.path.toLowerCase().includes(segment))
   }
   if (!existsDir(base)) return []
 
@@ -92,81 +82,14 @@ async function listCandidates(query: string): Promise<FileCandidate[]> {
   return children.filter(child => child.name.toLowerCase().includes(segment))
 }
 
-/** Enumerate every existing drive root (A:-Z:), optionally with labels. */
-async function drives(includeLabels: boolean): Promise<FileCandidate[]> {
-  const labels = includeLabels ? await readVolumeLabels() : {}
+/** Enumerate every existing drive root (A:-Z:). */
+function drives(): FileCandidate[] {
   const out: FileCandidate[] = []
   for (let code = 'A'.charCodeAt(0); code <= 'Z'.charCodeAt(0); code++) {
     const root = String.fromCharCode(code) + ':\\'
-    if (existsDir(root)) out.push({ path: root, name: root, kind: 'directory', label: labels[root] })
+    if (existsDir(root)) out.push({ path: root, name: root, kind: 'directory' })
   }
   return out
-}
-
-/** Volume-label cache (5-minute TTL; labels change rarely). */
-let labelCache: { at: number; labels: Record<string, string> } | null = null
-
-/**
- * Read volume labels through a wscript/VBS helper (FileSystemObject Drives
- * -> VolumeName). Any failure degrades to an empty label map (drives still
- * list without names).
- */
-async function readVolumeLabels(): Promise<Record<string, string>> {
-  if (labelCache !== null && Date.now() - labelCache.at < 5 * 60 * 1000) return labelCache.labels
-  const dir = tmpdir()
-  const vbsPath = join(dir, `dsh-labels-${process.pid}.vbs`)
-  const outPath = join(dir, `dsh-labels-${process.pid}.txt`)
-  try { unlinkSync(outPath) } catch { /* absent: fine */ }
-  const body = [
-    'Option Explicit',
-    'On Error Resume Next',
-    'Dim fso, d, f',
-    'Set fso = CreateObject("Scripting.FileSystemObject")',
-    'Set f = fso.CreateTextFile("' + outPath.replace(/\\/gu, '\\\\') + '", True)',
-    'For Each d In fso.Drives',
-    '  If d.DriveType = 2 Or d.DriveType = 3 Then',
-    '    If d.IsReady Then',
-    '      If Len(d.VolumeName) > 0 Then f.WriteLine CStr(d.DriveLetter) & "=" & d.VolumeName',
-    '    End If',
-    '  End If',
-    'Next',
-    'f.Close',
-  ].join('\r\n')
-  try {
-    writeFileSync(vbsPath, body, 'utf8')
-    await runWscript(vbsPath, 4000)
-  } catch {
-    labelCache = { at: Date.now(), labels: {} }
-    return {}
-  }
-  const labels: Record<string, string> = {}
-  try {
-    const text = readFileSync(outPath, 'utf8')
-    for (const line of text.split(/\r?\n/u)) {
-      const at = line.indexOf('=')
-      if (at === 1) labels[line.slice(0, 1).toUpperCase() + ':\\'] = line.slice(at + 1).trim()
-    }
-  } catch {
-    // Output file missing: no labels.
-  }
-  labelCache = { at: Date.now(), labels }
-  return labels
-}
-
-/** Run one wscript helper and resolve on exit (or after the timeout). */
-function runWscript(vbsPath: string, timeoutMs: number): Promise<void> {
-  return new Promise(resolve => {
-    const child = spawn('wscript.exe', ['//nologo', vbsPath], {
-      windowsHide: true,
-      stdio: 'ignore',
-    })
-    const timer = setTimeout(() => {
-      try { child.kill() } catch { /* already gone */ }
-      resolve()
-    }, timeoutMs)
-    child.on('exit', () => { clearTimeout(timer); resolve() })
-    child.on('error', () => { clearTimeout(timer); resolve() })
-  })
 }
 
 function existsDir(path: string): boolean {
@@ -195,7 +118,7 @@ function listDirectory(path: string): FileCandidate[] {
     } catch {
       continue
     }
-    out.push({ path: full, name, kind, label: undefined })
+    out.push({ path: full, name, kind })
   }
   out.sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === 'directory' ? -1 : 1))
   return out.slice(0, MAX_RESULTS)
