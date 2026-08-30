@@ -23,7 +23,7 @@ export interface FileCandidate {
   readonly name: string
   readonly kind: 'file' | 'directory'
   /** Windows volume label, drives only. */
-  readonly label?: string
+  readonly label: string | undefined
 }
 
 export function apply(ctx: Context): void {
@@ -62,11 +62,11 @@ export function apply(ctx: Context): void {
  */
 async function listCandidates(query: string): Promise<FileCandidate[]> {
   const normalized = query.replace(/\//gu, '\\')
-  if (normalized === '') return await drives()
+  if (normalized === '') return await drives(true)
 
   if (/^[a-zA-Z]:$/u.test(normalized)) {
     const root = normalized.toUpperCase() + '\\'
-    return existsDir(root) ? [{ path: root, name: root, kind: 'directory', label: (await readVolumeLabels())[root] }] : []
+    return existsDir(root) ? [{ path: root, name: root, kind: 'directory', label: undefined }] : []
   }
 
   const lastSep = normalized.lastIndexOf('\\')
@@ -75,7 +75,7 @@ async function listCandidates(query: string): Promise<FileCandidate[]> {
 
   if (base === '') {
     // 'c' / 'use'-style queries: complete against the drive letters.
-    return (await drives()).filter(drive => drive.path.toLowerCase().includes(segment))
+    return (await drives(false)).filter(drive => drive.path.toLowerCase().includes(segment))
   }
   if (!existsDir(base)) return []
 
@@ -85,8 +85,8 @@ async function listCandidates(query: string): Promise<FileCandidate[]> {
 }
 
 /** Enumerate every existing drive root (A:-Z:). */
-async function drives(): Promise<FileCandidate[]> {
-  const labels = await readVolumeLabels()
+async function drives(includeLabels: boolean): Promise<FileCandidate[]> {
+  const labels = includeLabels ? await readVolumeLabels() : {}
   const out: FileCandidate[] = []
   for (let code = 'A'.charCodeAt(0); code <= 'Z'.charCodeAt(0); code++) {
     const root = String.fromCharCode(code) + ':\\'
@@ -162,7 +162,7 @@ function listDirectory(path: string): FileCandidate[] {
       continue
     }
     if (kind === 'file' && out.length >= MAX_RESULTS) continue
-    out.push({ path: full, name, kind })
+    out.push({ path: full, name, kind, label: undefined })
   }
   out.sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === 'directory' ? -1 : 1))
   return out.slice(0, MAX_RESULTS)
