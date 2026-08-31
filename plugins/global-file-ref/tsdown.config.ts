@@ -8,10 +8,17 @@ import { defineConfig } from 'tsdown'
 
 const id = '@deepseek-ai/dsh-client-global-file-ref'
 
+// Host half: pick the platform entry at build time so each platform ships
+// the logic it actually runs (win: drive roots + backslashes; linux:
+// /proc/mounts mounted roots, dot-entries hidden by default).
+const hostEntry = process.platform === 'win32'
+  ? ['lib/types/win/index.js']
+  : ['lib/types/linux/index.js']
+
 export default defineConfig([
   {
     name: id,
-    entry: ['lib/types/index.js'],
+    entry: hostEntry,
     outDir: 'lib',
     format: ['esm'],
     platform: 'node',

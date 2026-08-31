@@ -6,10 +6,10 @@
   "private": true,
   "type": "module",
   "main": "lib/index.js",
-  "types": "lib/types/index.d.ts",
+  "types": "lib/types/linux/index.d.ts",
   "exports": {
     ".": {
-      "types": "./lib/types/index.d.ts",
+      "types": "./lib/types/linux/index.d.ts",
       "default": "./lib/index.js"
     },
     "./client": {
