@@ -10,6 +10,7 @@ dsh-plugins/
 ├── pnpm-workspace.yaml      # 所有插件作为同一 pnpm workspace 的成员
 ├── package.json             # 聚合脚本（build / typecheck）
 ├── README.md
+├── patches/                 # 对 deepseek-harness 上游的本地侵入式修改补丁集（见 patches/<基线>/README.md）
 └── plugins/
     └── <plugin-name>/       # 一个目录 = 一个插件
         ├── package.json     # 包名约定: @deepseek-ai/dsh-client-<name>
