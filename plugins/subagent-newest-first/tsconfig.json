@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    // Mirrors tsconfig.base.client.json: the copied component is written
+    // against ES2024 (Array.prototype.toReversed) and the browser DOM.
+    "target": "es2024",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
+    "declaration": true,
+    "rootDir": "src",
+    "outDir": "lib/types",
+    "types": ["node"],
+    "lib": ["ES2024", "DOM", "DOM.Iterable"]
+  },
+  "include": ["src"]
+}
