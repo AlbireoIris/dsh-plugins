@@ -85,10 +85,19 @@ async function clearNow(
   signal: AbortSignal | undefined,
   commandId: CommandId | undefined,
 ): Promise<{ kind: 'success'; text: string; sourceEventSeq?: number } | { kind: 'error'; text: string }> {
-  const events: readonly SessionEvent[] = session.events
+  // 新版 Session 类已移除 events 属性，改用 snapshotEvents()：无参调用返回
+  // 自日志起点到当前末尾的完整只读事件快照数组，语义与旧 events 属性等价，
+  // 后续按 events[i].type/.seq 遍历的 turn 边界算法不变。
+  const events: readonly SessionEvent[] = session.snapshotEvents()
+  // turnStarts holds the *seq* of each turn/start event (not the events-array
+  // index). The surface nodes we compare against are also seqs, so boundary
+  // math must run in seq space: mixing an array index with a seq yields a
+  // spuriously tiny `visibleTurns` and a false "nothing to clear" every time
+  // compaction has advanced seq far past the event index (SESSION_FORMAT keeps
+  // the log append-only, so index lags seq by the number of replaced spans).
   const turnStarts: number[] = []
   for (let i = 0; i < events.length; i++) {
-    if (events[i]!.type === 'turn/start') turnStarts.push(i)
+    if (events[i]!.type === 'turn/start') turnStarts.push(events[i]!.seq)
   }
   const nodes = session.surface.nodes
   if (nodes.length === 0) {
@@ -133,14 +142,69 @@ async function clearNow(
   const boundaryTurn = visibleTurns[visibleTurns.length - keepTurns]!
 
   // First retained surface node: the first message of the kept tail.
-  let keepFromIdx = nodes.findIndex(seq => turnIndexOf(seq) >= boundaryTurn)
-  if (keepFromIdx === -1) keepFromIdx = nodes.length
-  while (keepFromIdx > 0 && keepFromIdx < nodes.length
-    && !toolPairingBalancedBefore(session, nodes[keepFromIdx]!)) {
+  const boundaryIdx = nodes.findIndex(seq => turnIndexOf(seq) >= boundaryTurn)
+  if (boundaryIdx === -1) {
+    // The desired tail boundary sits past the surface (e.g. the tail was folded
+    // into a checkpoint). There is nothing to keep, so clear the whole surface.
+    const allStart = nodes[0]!
+    const allEnd = nodes[nodes.length - 1]!
+    const allMeter = ctx.tokenMeter
+    const allSummarize = async (): Promise<SummaryResult> => ({
+      summary: markerSummary(keepTurns),
+      provider: '',
+      model: '',
+    })
+    const allResult = await compactSurfaceRegion(
+      { meter: allMeter, summarize: allSummarize },
+      session,
+      allStart,
+      allEnd,
+      agent,
+      {
+        owner: null,
+        stability: 'whole-surface',
+        ...commandId === undefined ? {} : { sourceCommandId: commandId },
+        flush: async () => { await ctx.sessions.flush(session) },
+      },
+      signal,
+    )
+    return {
+      kind: 'success',
+      text: `已清理：保留最近 ${keepTurns} 轮，更早的 ${allResult.shadowedSeqs.length} 条消息已折叠为一条清理标记。`,
+      sourceEventSeq: allResult.summarySeq,
+    }
+  }
+
+  // Find a balanced cut for the kept tail. Prefer keeping at least the
+  // requested tail by scanning toward the head; if that dead-ends at the
+  // surface head, fall back to scanning toward the tail and keeping fewer
+  // turns. Scanning both directions guarantees the cut never splits an
+  // assistant tool-call/result pair, so `/clear` stays available even when the
+  // requested boundary falls inside an imbalanced region (the harness's own
+  // compaction can succeed while a single-direction scan would not).
+  let keepFromIdx = boundaryIdx
+  while (keepFromIdx > 0 && !toolPairingBalancedBefore(session, nodes[keepFromIdx]!)) {
     keepFromIdx -= 1
   }
   if (keepFromIdx === 0) {
-    return { kind: 'error', text: '清理中止：无法找到可保留尾段的安全边界（工具调用对不闭合），请稍后重试。' }
+    keepFromIdx = boundaryIdx
+    while (keepFromIdx < nodes.length
+      && !toolPairingBalancedBefore(session, nodes[keepFromIdx]!)) {
+      keepFromIdx += 1
+    }
+    if (keepFromIdx >= nodes.length) {
+      return { kind: 'error', text: '清理中止：当前历史不具备可安全折叠的边界（工具调用对不闭合），请稍后重试。' }
+    }
+  }
+  if (keepFromIdx === 0) {
+    // The boundary resolved to the surface head: the whole visible surface is
+    // already the retained tail, so there is no older span to fold. Report a
+    // no-op instead of reading nodes[-1], which is undefined and would flow
+    // into the compaction transaction and fail as an unknown end seq.
+    return {
+      kind: 'success',
+      text: `无需清理：保留最近 ${keepTurns} 轮时，边界落在当前对话的头部，没有更早的内容需要折叠。`,
+    }
   }
 
   const start = nodes[0]!

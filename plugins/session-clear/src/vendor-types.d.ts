@@ -79,7 +79,9 @@ declare module '@deepseek-ai/dsh-session' {
   export interface Session {
     readonly id: SessionId
     readonly header: { readonly cwd?: string }
-    readonly events: readonly SessionEvent[]
+    // 新版 Session 类已移除 events 属性：无参 snapshotEvents() 返回自日志起点
+    // 到当前末尾的完整只读事件快照数组，语义与旧 events 属性等价。
+    snapshotEvents(fromSeq?: number, toSeqExclusive?: number): readonly SessionEvent[]
     readonly surface: { readonly nodes: readonly number[] }
   }
 
@@ -103,7 +105,11 @@ declare module '@deepseek-ai/dsh-token-meter' {
 }
 
 declare module '@deepseek-ai/dsh-compaction' {
-  export function toolPairingBalancedBefore(session: { readonly events: readonly unknown[] }, seq: number): boolean
+  // 真实签名为 toolPairingBalancedBefore(session: Session, seq: SessionSeq)，
+  // 参数是完整 Session 对象（不再经 events 属性读取）。
+  import type { Session } from '@deepseek-ai/dsh-session'
+
+  export function toolPairingBalancedBefore(session: Session, seq: number): boolean
 }
 
 declare module '@deepseek-ai/dsh-compaction-basic/src/region.ts' {
