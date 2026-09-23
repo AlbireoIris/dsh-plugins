@@ -1,5 +1,5 @@
 {
-  "name": "@deepseek-ai/dsh-client-mimo-thinking-hide",
+  "name": "dsh-client-ui-mimo-thinking-hide",
   "description": "MiMo-style thinking-chain hide for dsh assistant chat rows",
   "version": "0.1.0",
   "license": "MIT",
