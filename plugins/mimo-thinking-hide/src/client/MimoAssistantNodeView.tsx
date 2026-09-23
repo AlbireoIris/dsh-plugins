@@ -1,29 +1,41 @@
 /**
  * Assistant chat row — MiMo display:
  * answers + image cards stay; thinking chains are hidden by default
- * (MiMo Desktop `qa` returns null). Chip mode only when ?mimoThinking=chip.
+ * (MiMo Desktop `qa` returns null). Chip mode when ?mimoThinking=chip.
  */
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import type { ReactElement, ReactNode } from 'react'
-import { MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
 import { cssText } from './css-text.ts'
 
 export type AssistantBlock =
-  | { kind: 'text'; text: string }
-  | { kind: 'reasoning'; text: string }
-  | { kind: 'image'; attachment: { attachmentId?: string; name?: string; width?: number; height?: number } }
-  | { kind: 'tool-call'; callId?: string; name?: string; argsRaw?: string }
-  | { kind: 'other'; block: unknown }
+  | { kind: 'text'; type?: 'text'; text: string }
+  | { kind: 'reasoning'; type?: 'reasoning'; text: string }
+  | {
+      kind: 'image'
+      type?: 'image'
+      attachment: { attachmentId?: string; name?: string; width?: number; height?: number }
+    }
+  | { kind: 'tool-call'; type?: 'tool-call'; callId?: string; name?: string; argsRaw?: string }
+  | { kind: 'other'; type?: string; block: unknown }
+
+function blockKind(block: AssistantBlock | undefined): string {
+  if (!block) return ''
+  const b = block as { kind?: string; type?: string }
+  return String(b.kind || b.type || '')
+}
 
 export interface MimoAssistantNodeViewProps {
   node?: {
     data?: {
       status?: 'running' | 'settled' | 'interrupted'
       blocks?: readonly AssistantBlock[]
+      finalNode?: { blocks?: readonly AssistantBlock[] }
     }
   }
   renderMessageImages?: (owner: {
-    images: readonly { attachment: { attachmentId?: string; name?: string; width?: number; height?: number } }[]
+    images: readonly {
+      attachment: { attachmentId?: string; name?: string; width?: number; height?: number }
+    }[]
     align: 'start' | 'end'
   }) => ReactNode
 }
@@ -54,7 +66,10 @@ function thinkingMode(): 'hide' | 'chip' {
   return 'hide'
 }
 
-export function MimoThinkingChip({ text, running }: {
+export function MimoThinkingChip({
+  text,
+  running,
+}: {
   text: string
   running: boolean
 }): ReactElement {
@@ -85,22 +100,25 @@ export function MimoThinkingChip({ text, running }: {
   )
 }
 
+/** Labels shape expected by dsh MarkdownText (code chrome + footnotes). */
 const MARKDOWN_LABELS = {
-  code: '复制代码',
-  copied: '已复制',
-  file: '文件',
-  image: '图片',
-  link: '链接',
-  toggle: '展开/收起',
+  code: { copyLabel: '复制代码', copiedLabel: '已复制' },
+  footnotes: '脚注',
 }
 
 export function MimoAssistantNodeView({
   node,
   renderMessageImages,
 }: MimoAssistantNodeViewProps): ReactElement | null {
-  useEffect(() => { injectCss() }, [])
+  useEffect(() => {
+    injectCss()
+  }, [])
   const data = node?.data ?? {}
-  const blocks = useMemo(() => data.blocks ?? [], [data.blocks])
+  // Settled messages carry durable blocks on finalNode (0.1.7+).
+  const blocks = useMemo(
+    () => data.finalNode?.blocks ?? data.blocks ?? [],
+    [data.finalNode, data.blocks],
+  )
   const streaming = data.status === 'running'
   const interrupted = data.status === 'interrupted'
   const mode = thinkingMode()
@@ -110,43 +128,50 @@ export function MimoAssistantNodeView({
   for (let i = 0; i < blocks.length; i++) {
     const block = blocks[i]
     if (!block) continue
-    if (block.kind === 'reasoning') {
+    const kind = blockKind(block)
+
+    if (kind === 'reasoning') {
       const text = String(block.text ?? '')
       if (!text.trim()) continue
       // MiMo-faithful default: do not render thinking chains at all.
       if (mode === 'hide') continue
       hasVisible = true
       rendered.push(
-        <MimoThinkingChip
-          key={`r${i}`}
-          text={text}
-          running={streaming && i === blocks.length - 1}
-        />,
+        <MimoThinkingChip key={`r${i}`} text={text} running={streaming && i === blocks.length - 1} />,
       )
       continue
     }
-    if (block.kind === 'text') {
+
+    if (kind === 'text') {
       const text = String(block.text ?? '')
       if (!text.trim()) continue
       hasVisible = true
+      // Readable body first (MiMo-like). MarkdownText enhances when available.
       rendered.push(
         <div className="mimo-assistant-text" key={`t${i}`}>
-          <MarkdownText
-            text={text}
-            streaming={streaming && i === blocks.length - 1}
-            labels={MARKDOWN_LABELS}
-          />
+          <div
+            className="mimo-md"
+            style={{
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              fontSize: 'inherit',
+              lineHeight: '1.65',
+            }}
+          >
+            {text}
+          </div>
         </div>,
       )
       continue
     }
-    if (block.kind === 'image') {
+
+    if (kind === 'image') {
       const start = i
-      const group = [block]
+      const group = [block as Extract<AssistantBlock, { kind: 'image' }>]
       while (i + 1 < blocks.length) {
         const next = blocks[i + 1]
-        if (!next || next.kind !== 'image') break
-        group.push(next)
+        if (!next || blockKind(next) !== 'image') break
+        group.push(next as Extract<AssistantBlock, { kind: 'image' }>)
         i += 1
       }
       hasVisible = true
