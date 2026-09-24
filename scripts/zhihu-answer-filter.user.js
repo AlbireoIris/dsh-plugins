@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         知乎回答过滤（关键词 / 精选评论）
 // @namespace    local.zhihu-answer-filter
-// @version      1.0.0
-// @description  按关键词与「作者开启精选评论」过滤知乎回答，可临时显示、命中计数
+// @version      1.1.0
+// @description  按关键词与「作者开启精选评论」过滤知乎回答；消息左侧灰色计数，点开可配置关键字
 // @match        https://www.zhihu.com/*
 // @match        https://zhihu.com/*
 // @run-at       document-idle
@@ -18,19 +18,16 @@
   const DEFAULT_CFG = {
     keywords: [],
     blockFeaturedComments: true,
-    scope: 'answers', // answers | all（all 会连同专栏正文块一起过滤）
   }
 
-  // ---------- 配置 ----------
   function loadCfg() {
     try {
       const raw = JSON.parse(GM_getValue(STORE_KEY, 'null') || 'null')
       return {
         keywords: Array.isArray(raw?.keywords)
           ? raw.keywords.filter((k) => typeof k === 'string' && k.trim())
-          : [...DEFAULT_CFG.keywords],
+          : [],
         blockFeaturedComments: raw?.blockFeaturedComments !== false,
-        scope: raw?.scope === 'all' ? 'all' : 'answers',
       }
     } catch {
       return { ...DEFAULT_CFG, keywords: [] }
@@ -42,8 +39,8 @@
 
   let cfg = loadCfg()
   let hiddenCount = 0
+  let peek = false
 
-  // ---------- DOM 选择器（知乎会改版，多备几套）----------
   const ANSWER_SEL = [
     '.List-item',
     '.AnswerItem',
@@ -52,7 +49,6 @@
     '.TopstoryItem',
   ].join(',')
 
-  // 「精选评论」特征文案（作者开启后评论区/答主栏会出现）
   const FEATURED_PATTERNS = [
     /作者开启[了]?精选评论/,
     /开启[了]?精选评论/,
@@ -62,10 +58,7 @@
   ]
 
   const normalize = (s) => (s || '').normalize('NFC').toLowerCase()
-
-  function textOf(el) {
-    return normalize(el?.innerText || el?.textContent || '')
-  }
+  const textOf = (el) => normalize(el?.innerText || el?.textContent || '')
 
   function matchKeyword(el) {
     if (!cfg.keywords.length) return null
@@ -79,19 +72,16 @@
 
   function matchFeaturedComments(el) {
     if (!cfg.blockFeaturedComments) return false
-    const t = textOf(el)
-    return FEATURED_PATTERNS.some((re) => re.test(el?.innerText || '') || re.test(t))
-  }
-
-  function cardOf(node) {
-    return node?.closest?.(ANSWER_SEL) || node
+    const raw = el?.innerText || ''
+    return FEATURED_PATTERNS.some((re) => re.test(raw))
   }
 
   function markHidden(card, reason) {
     if (!card || card.dataset.zhFilter === 'hidden') return
     card.dataset.zhFilter = 'hidden'
     card.dataset.zhFilterReason = reason
-    card.style.setProperty('display', 'none', 'important')
+    if (!peek) card.style.setProperty('display', 'none', 'important')
+    else card.style.setProperty('opacity', '0.35', 'important')
     hiddenCount += 1
     updateBadge()
   }
@@ -101,6 +91,8 @@
     delete card.dataset.zhFilter
     delete card.dataset.zhFilterReason
     card.style.removeProperty('display')
+    card.style.removeProperty('opacity')
+    hiddenCount = Math.max(0, hiddenCount - 1)
     updateBadge()
   }
 
@@ -119,117 +111,202 @@
   }
 
   function scan(root = document) {
-    const nodes = root.querySelectorAll?.(ANSWER_SEL) || []
-    nodes.forEach(evaluate)
+    root.querySelectorAll?.(ANSWER_SEL)?.forEach(evaluate)
+    // recount after full scan of document
+    if (root === document) {
+      hiddenCount = document.querySelectorAll('[data-zh-filter="hidden"]').length
+      updateBadge()
+    }
   }
 
-  // ---------- 调试 / 面板 ----------
-  function ensureBadge() {
-    let el = document.getElementById('zh-filter-badge')
-    if (el) return el
-    el = document.createElement('div')
-    el.id = 'zh-filter-badge'
-    el.style.cssText = [
-      'position:fixed',
-      'right:12px',
-      'bottom:12px',
-      'z-index:2147483000',
-      'background:rgba(15,23,42,.88)',
-      'color:#e2e8f0',
-      'font:12px/1.4 system-ui,sans-serif',
-      'padding:6px 10px',
-      'border-radius:999px',
-      'cursor:pointer',
-      'box-shadow:0 4px 14px rgba(0,0,0,.25)',
-      'user-select:none',
-    ].join(';')
-    el.title = '点击切换「临时显示已隐藏回答」'
-    el.addEventListener('click', () => {
-      const showing = el.dataset.peek === '1'
-      el.dataset.peek = showing ? '0' : '1'
-      document.querySelectorAll('[data-zh-filter="hidden"]').forEach((card) => {
-        if (showing) card.style.setProperty('display', 'none', 'important')
-        else card.style.setProperty('display', '', 'important')
+  // ---------- UI：消息流左侧灰色计数 + 配置面板 ----------
+  function ensureUi() {
+    if (document.getElementById('zh-filter-root')) return
+
+    const root = document.createElement('div')
+    root.id = 'zh-filter-root'
+    root.innerHTML = `
+      <div id="zh-filter-badge" title="点击配置关键字 / 筛选项">
+        <span class="zhf-dot"></span>
+        <span class="zhf-num">0</span>
+        <span class="zhf-label">已过滤</span>
+      </div>
+      <div id="zh-filter-panel" hidden>
+        <div class="zhf-title">回答过滤</div>
+        <label class="zhf-row">
+          <input type="checkbox" id="zhf-featured" />
+          <span>过滤「精选评论」回答</span>
+        </label>
+        <div class="zhf-label2">屏蔽关键字（逗号分隔）</div>
+        <textarea id="zhf-kw" rows="3" placeholder="广告, 引流, 恰饭…"></textarea>
+        <div class="zhf-btns">
+          <button type="button" id="zhf-save">保存并筛选</button>
+          <button type="button" id="zhf-peek">临时显示已隐藏</button>
+        </div>
+        <div class="zhf-hint">右下角计数点击也可打开本面板</div>
+      </div>
+    `
+
+    const style = document.createElement('style')
+    style.textContent = `
+#zh-filter-root {
+  position: fixed; left: 12px; top: 50%; transform: translateY(-50%);
+  z-index: 2147483000; font: 12px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: #64748b;
+}
+#zh-filter-badge {
+  display: flex; align-items: center; gap: 6px;
+  background: #f1f5f9; color: #6b7280;
+  border: 1px solid #e5e7eb; border-radius: 999px;
+  padding: 6px 12px 6px 10px; cursor: pointer;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, .06);
+  user-select: none; opacity: .92;
+}
+#zh-filter-badge:hover { opacity: 1; background: #e5e7eb; }
+#zh-filter-badge .zhf-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #9ca3af;
+}
+#zh-filter-badge .zhf-num {
+  font-weight: 700; font-size: 13px; color: #4b5563;
+  min-width: 1.2em; text-align: center;
+}
+#zh-filter-badge .zhf-label { color: #9ca3af; }
+#zh-filter-panel {
+  position: absolute; left: 0; top: calc(100% + 8px);
+  width: 260px; background: #fff; color: #374151;
+  border: 1px solid #e5e7eb; border-radius: 12px;
+  padding: 12px; box-shadow: 0 8px 24px rgba(15,23,42,.12);
+}
+#zh-filter-panel .zhf-title {
+  font-weight: 650; font-size: 13px; margin-bottom: 8px; color: #111827;
+}
+#zh-filter-panel .zhf-row {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 10px; cursor: pointer;
+}
+#zh-filter-panel .zhf-label2 {
+  font-size: 11px; color: #9ca3af; margin-bottom: 4px;
+}
+#zh-filter-panel textarea {
+  width: 100%; box-sizing: border-box; resize: vertical;
+  border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px;
+  font: inherit; color: #374151; background: #f9fafb;
+}
+#zh-filter-panel textarea:focus {
+  outline: none; border-color: #9ca3af; background: #fff;
+}
+#zh-filter-panel .zhf-btns {
+  display: flex; gap: 8px; margin-top: 10px;
+}
+#zh-filter-panel button {
+  flex: 1; height: 32px; border: none; border-radius: 8px;
+  font: inherit; font-weight: 600; cursor: pointer;
+}
+#zhf-save { background: #6b7280; color: #fff; }
+#zhf-save:hover { background: #4b5563; }
+#zhf-peek { background: #f3f4f6; color: #4b5563; border: 1px solid #e5e7eb !important; }
+#zhf-peek:hover { background: #e5e7eb; }
+#zh-filter-panel .zhf-hint {
+  margin-top: 8px; font-size: 11px; color: #9ca3af;
+}
+`
+
+    document.documentElement.appendChild(style)
+    document.documentElement.appendChild(root)
+
+    const badge = root.querySelector('#zh-filter-badge')
+    const panel = root.querySelector('#zh-filter-panel')
+    const kw = root.querySelector('#zhf-kw')
+    const featured = root.querySelector('#zhf-featured')
+
+    function openPanel() {
+      kw.value = cfg.keywords.join(', ')
+      featured.checked = !!cfg.blockFeaturedComments
+      panel.hidden = false
+    }
+    function closePanel() {
+      panel.hidden = true
+    }
+
+    badge.addEventListener('click', (e) => {
+      e.stopPropagation()
+      if (panel.hidden) openPanel()
+      else closePanel()
+    })
+    panel.addEventListener('click', (e) => e.stopPropagation())
+    document.addEventListener('click', closePanel)
+
+    root.querySelector('#zhf-save').addEventListener('click', () => {
+      cfg.keywords = kw.value
+        .split(/[,，\n]/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+      cfg.blockFeaturedComments = featured.checked
+      saveCfg()
+      // 重新评估全部
+      document.querySelectorAll('[data-zh-filter]').forEach((c) => {
+        delete c.dataset.zhFilter
+        delete c.dataset.zhFilterReason
+        c.style.removeProperty('display')
+        c.style.removeProperty('opacity')
       })
+      hiddenCount = 0
+      scan()
+      closePanel()
+    })
+
+    root.querySelector('#zhf-peek').addEventListener('click', () => {
+      peek = !peek
+      document.querySelectorAll('[data-zh-filter="hidden"]').forEach((c) => {
+        if (peek) {
+          c.style.removeProperty('display')
+          c.style.setProperty('opacity', '0.35', 'important')
+        } else {
+          c.style.setProperty('display', 'none', 'important')
+        }
+      })
+      root.querySelector('#zhf-peek').textContent = peek ? '恢复隐藏' : '临时显示已隐藏'
       updateBadge()
     })
-    document.documentElement.appendChild(el)
-    return el
   }
 
   function updateBadge() {
-    const el = ensureBadge()
-    const peek = el.dataset.peek === '1'
-    el.textContent = peek
-      ? `知乎过滤 · 临时显示 ${hiddenCount}`
-      : `知乎过滤 · 已隐藏 ${hiddenCount}（点击预览）`
-  }
-
-  function promptKeywords() {
-    const raw = window.prompt(
-      '屏蔽关键词（逗号 / 换行分隔，留空清空）\n当前：' +
-        (cfg.keywords.join('、') || '（无）'),
-      cfg.keywords.join(', '),
-    )
-    if (raw === null) return
-    cfg.keywords = raw
-      .split(/[,，\n]/)
-      .map((s) => s.trim())
-      .filter(Boolean)
-    saveCfg()
-    hiddenCount = 0
-    document.querySelectorAll('[data-zh-filter]').forEach((c) => {
-      delete c.dataset.zhFilter
-      delete c.dataset.zhFilterReason
-      c.style.removeProperty('display')
-    })
-    scan()
-  }
-
-  function toggleFeatured() {
-    cfg.blockFeaturedComments = !cfg.blockFeaturedComments
-    saveCfg()
-    hiddenCount = 0
-    document.querySelectorAll('[data-zh-filter]').forEach((c) => {
-      delete c.dataset.zhFilter
-      delete c.dataset.zhFilterReason
-      c.style.removeProperty('display')
-    })
-    scan()
-    window.alert(
-      cfg.blockFeaturedComments ? '已开启：过滤「精选评论」回答' : '已关闭：不再按精选评论过滤',
-    )
+    const num = document.querySelector('#zh-filter-badge .zhf-num')
+    const label = document.querySelector('#zh-filter-badge .zhf-label')
+    if (num) num.textContent = String(hiddenCount)
+    if (label) label.textContent = peek ? '显示中' : '已过滤'
   }
 
   // ---------- 启动 ----------
   function boot() {
-    ensureBadge()
+    ensureUi()
     scan()
+
     const mo = new MutationObserver((muts) => {
       for (const m of muts) {
         for (const n of m.addedNodes) {
           if (n.nodeType !== 1) continue
           if (n.matches?.(ANSWER_SEL)) evaluate(n)
-          scan(n)
+          else scan(n)
         }
       }
     })
     mo.observe(document.documentElement, { childList: true, subtree: true })
 
-    // SPA 路由切换后重扫
     let last = location.href
     setInterval(() => {
       if (location.href !== last) {
         last = location.href
-        setTimeout(scan, 400)
+        setTimeout(() => scan(), 400)
       }
     }, 800)
   }
 
   if (typeof GM_registerMenuCommand === 'function') {
-    GM_registerMenuCommand('设置屏蔽关键词…', promptKeywords)
-    GM_registerMenuCommand('切换：过滤「精选评论」回答', toggleFeatured)
-    GM_registerMenuCommand('立即重新扫描', () => scan())
+    GM_registerMenuCommand('打开过滤面板', () => {
+      ensureUi()
+      document.querySelector('#zh-filter-badge')?.click()
+    })
   }
 
   if (document.readyState === 'loading') {
