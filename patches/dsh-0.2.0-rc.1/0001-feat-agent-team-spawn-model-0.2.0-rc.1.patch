@@ -1,0 +1,176 @@
+From 466851f7e40087a7fc3d87ab7d5dd83c80cddebf Mon Sep 17 00:00:00 2001
+From: zhululin1 <zhululin1@xiaomi.com>
+Date: Tue, 29 Sep 2026 15:15:32 +0800
+Subject: [PATCH 1/2] =?UTF-8?q?feat(agent-team):=20=E6=81=A2=E5=A4=8D=20sp?=
+ =?UTF-8?q?awn=20model=20=E9=80=8F=E4=BC=A0=E8=A1=A5=E4=B8=81=E5=B9=B6?=
+ =?UTF-8?q?=E9=80=82=E9=85=8D=200.2.0-rc.1=20=E5=9F=BA=E7=BA=BF?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+承接 a560a554d8（0.1.2-rc.1 版），把 spawn 模型选择透传重做到 0.2.0-rc.1：
+spawn_teammate 入参新增可选 model/reasoning_effort，经 SpawnTeammateRequest
+透传到 roster 的子代理 agentOptions；两值均省略时沿用
+resolveChildAgentOptions 继承 Team Lead 路由的原行为。
+
+未用 git apply：补丁三个代码文件的 blob 与 0.2.0-rc.1 均不一致，
+tool-agent-team/src/index.ts:193 附近上游多出
+return { member: modelMember(result.member) } 一行，hunk 上下文失配。
+改为按补丁语义定点改写三处代码 + 两处 README。
+
+对上游 0.2.0-rc.1 的复核（非沿用旧结论）：
+- 接缝完好：StartContinuableRequest 仍有 agentOptions?: AgentOptions，
+  resolveChildAgentOptions 的继承语义未变。
+- SpawnTeammateRequest.reasoningEffort 仍从 @deepseek-ai/dsh-llm 导入
+  ReasoningEffortId（0.2.0 的 llm 主入口仍 export * from './brand.ts'）：
+  经 dsh-agent 主入口导入会把 core/session 的 host 侧
+  sessions: SessionStore 声明合并拉进 Client 编译程序，mount.ts 的
+  ctx.sessions 随之解析错型。pnpm run typecheck 通过确认。
+- spawn_teammate 的 execute 保留上游 config.forkProvider/freshProvider
+  结构，仅叠加透传字段。
+
+README 三件套 spawn_teammate 行同步补 model/reasoning_effort 描述，
+i18n 配对 hash 经 pnpm run verify-translation-pairing --write 重录
+（仅 /use-this-package/what-the-model-can-do 一节变化）。
+
+Co-Authored-By: Claude Code <noreply@anthropic.com>
+---
+ packages/experimental/agent-team/src/roster.ts      |  7 +++++++
+ packages/experimental/agent-team/src/types.ts       | 13 +++++++++++++
+ .../experimental/tool-agent-team/README.i18n.yaml   |  4 ++--
+ packages/experimental/tool-agent-team/README.md     |  2 +-
+ packages/experimental/tool-agent-team/README.zh.md  |  2 +-
+ packages/experimental/tool-agent-team/src/index.ts  | 13 +++++++++++++
+ 6 files changed, 37 insertions(+), 4 deletions(-)
+
+diff --git a/packages/experimental/agent-team/src/roster.ts b/packages/experimental/agent-team/src/roster.ts
+index d58357e03f..d237b911bf 100644
+--- a/packages/experimental/agent-team/src/roster.ts
++++ b/packages/experimental/agent-team/src/roster.ts
+@@ -286,6 +286,13 @@ export class TeamRoster {
+         request: {
+           prompt: request.prompt,
+           parent: root,
++          // Only override the child's route when the caller named one: omitting
++          // both keeps `resolveChildAgentOptions` inheriting the Team Lead's
++          // route, which is the existing behavior.
++          agentOptions: {
++            ...request.model === undefined ? {} : { model: request.model },
++            ...request.reasoningEffort === undefined ? {} : { reasoningEffort: request.reasoningEffort },
++          },
+         },
+         signal,
+       })
+diff --git a/packages/experimental/agent-team/src/types.ts b/packages/experimental/agent-team/src/types.ts
+index 9921886f6f..e4ac4f1193 100644
+--- a/packages/experimental/agent-team/src/types.ts
++++ b/packages/experimental/agent-team/src/types.ts
+@@ -1,6 +1,7 @@
+ /** Public Agent Teams identities, durable records, and service request values. */
+ 
+ import type { Branded } from '@deepseek-ai/dsh-brand'
++import type { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+ import type { ContentBlock } from '@deepseek-ai/dsh-llm/types'
+ import type { SessionId } from '@deepseek-ai/dsh-session/types'
+ 
+@@ -169,6 +170,18 @@ export interface SpawnTeammateRequest {
+   readonly prompt: ContentBlock[]
+   readonly context: 'fresh' | 'fork'
+   readonly provider: string
++  /**
++   * Optional per-teammate model. Omitting it inherits the Team Lead's model;
++   * naming one runs this teammate on its own model, which is what lets a
++   * reviewer use a different model from a producer.
++   */
++  readonly model?: string
++  /**
++   * Optional per-teammate reasoning effort. Imported from `dsh-llm` rather than
++   * `dsh-agent` so this types module stays on the shallow type-only dependency
++   * face the Client projection already contains.
++   */
++  readonly reasoningEffort?: ReasoningEffortId
+   readonly signal: AbortSignal
+ }
+ 
+diff --git a/packages/experimental/tool-agent-team/README.i18n.yaml b/packages/experimental/tool-agent-team/README.i18n.yaml
+index 1eaa7bd4c0..0f3c5a5783 100644
+--- a/packages/experimental/tool-agent-team/README.i18n.yaml
++++ b/packages/experimental/tool-agent-team/README.i18n.yaml
+@@ -24,8 +24,8 @@
+   en: 9af650a79711b3b3
+   zh: 2930360011b544e0
+ /deepseek-ai-dsh-experimental-tool-agent-team/use-this-package/what-the-model-can-do:
+-  en: be42811bbcc3b438
+-  zh: 014bd055ca694315
++  en: 25cfd4d0164db728
++  zh: 817d57993b8bef2b
+ /deepseek-ai-dsh-experimental-tool-agent-team/use-this-package/what-success-and-failure-look-like:
+   en: 259e9d39e1d1579a
+   zh: c61feed86e1ba2d2
+diff --git a/packages/experimental/tool-agent-team/README.md b/packages/experimental/tool-agent-team/README.md
+index 0918686d28..11467c6d85 100644
+--- a/packages/experimental/tool-agent-team/README.md
++++ b/packages/experimental/tool-agent-team/README.md
+@@ -56,7 +56,7 @@ Try it by asking the Lead model: "create a teammate named reviewer to check the
+ 
+ The nine tools group into four capabilities:
+ 
+-- **Create a teammate** — `spawn_teammate` takes a name, a description, and the initial task; only the Lead can call it.
++- **Create a teammate** — `spawn_teammate` takes a name, a description, the initial task, and optionally a distinct `model` (and `reasoning_effort`) so a teammate runs on its own model instead of inheriting the Lead's; only the Lead can call it.
+ - **Send messages** — `send_message` steers a running member at its nearest step boundary, starts or resumes an inactive member.
+ - **See and wait** — `list_agents` returns each member’s `target` and availability; `wait_agent` waits for the next team change; `interrupt_agent` stops a teammate's current turn (Lead only).
+ - **Manage the task board** — `team_task_create`, `team_task_list`, `team_task_get`, and `team_task_update` add, browse, read, and update shared tasks.
+diff --git a/packages/experimental/tool-agent-team/README.zh.md b/packages/experimental/tool-agent-team/README.zh.md
+index 8243f8471a..9b09237106 100644
+--- a/packages/experimental/tool-agent-team/README.zh.md
++++ b/packages/experimental/tool-agent-team/README.zh.md
+@@ -56,7 +56,7 @@ kind: "package-reference"
+ 
+ 九个工具分为四类能力：
+ 
+-- **创建 teammate**——`spawn_teammate` 接收名字、描述与初始任务；只有 Lead 可以调用它。
++- **创建 teammate**——`spawn_teammate` 接收名字、描述、初始任务，以及可选的 `model`（和 `reasoning_effort`），让 teammate 用自己的模型而不是继承 Lead 的；只有 Lead 可以调用它。
+ - **发送消息**——`send_message` 在最近的步骤边界对运行中的成员进行 steering（中途引导）、启动或恢复非活动成员。
+ - **查看与等待**——`list_agents` 返回各成员的 `target` 与可用状态；`wait_agent` 等待下一次团队变化；`interrupt_agent` 停止 teammate 的当前轮次（仅限 Lead）。
+ - **管理任务板**——`team_task_create`、`team_task_list`、`team_task_get` 与 `team_task_update` 添加、浏览、读取与更新共享任务。
+diff --git a/packages/experimental/tool-agent-team/src/index.ts b/packages/experimental/tool-agent-team/src/index.ts
+index 75dee88c70..49e24d4adb 100644
+--- a/packages/experimental/tool-agent-team/src/index.ts
++++ b/packages/experimental/tool-agent-team/src/index.ts
+@@ -5,6 +5,7 @@ import z from '@deepseek-ai/schemastery'
+ import type { Agent } from '@deepseek-ai/dsh-agent'
+ import { TeamTaskId } from '@deepseek-ai/dsh-experimental-agent-team'
+ import type { TeamMemberView } from '@deepseek-ai/dsh-experimental-agent-team'
++import type { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+ import { defineTool } from '@deepseek-ai/dsh-tools'
+ import type { InferValue, ValueSchemaSpec } from '@deepseek-ai/dsh-tools'
+ 
+@@ -184,6 +185,14 @@ function install(agent: Agent, ctx: Context, config: Required<Config>): () => vo
+           enum: ['fresh', 'fork'],
+           description: 'fresh starts without Lead history; fork inherits completed Lead turns. Defaults to fresh.',
+         },
++        model: {
++          type: 'string',
++          description: 'Optional model id for this teammate. Omit to inherit the Team Lead model; set it to run this teammate on a distinct model.',
++        },
++        reasoning_effort: {
++          type: 'string',
++          description: 'Optional reasoning-effort id for this teammate, honored with model. Omit to let that model resolve its own default effort.',
++        },
+       },
+       output: jsonOutput(SPAWN_VALUE_SCHEMA),
+       async execute(args, exec) {
+@@ -206,6 +215,10 @@ To message another teammate, use send_message({ target: "<teammate name>", messa
+           ],
+           context,
+           provider: context === 'fork' ? config.forkProvider : config.freshProvider,
++          ...args.model === undefined ? {} : { model: args.model },
++          ...args.reasoning_effort === undefined
++            ? {}
++            : { reasoningEffort: args.reasoning_effort as ReasoningEffortId },
+           signal: exec.signal,
+         })
+         return { member: modelMember(result.member) }
+-- 
+2.43.0
+

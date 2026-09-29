@@ -3,6 +3,8 @@
 DeepSeek Harness（dsh web）个人插件集合。每个插件一个目录，独立打包、独立安装，
 持续新增插件时不互相影响。
 
+仓库同时归档**对上游 deepseek-harness 的本地侵入式修改补丁集**（见 `patches/`）。
+
 ## 仓库布局
 
 ```
@@ -10,6 +12,10 @@ dsh-plugins/
 ├── pnpm-workspace.yaml      # 所有插件作为同一 pnpm workspace 的成员
 ├── package.json             # 聚合脚本（build / typecheck）
 ├── README.md
+├── patches/                 # 对上游 deepseek-harness 的本地侵入式修改补丁集
+│   └── <基线版本>/           # 一个目录 = 一个上游基线（如 dsh-0.2.0-rc.1）
+│       ├── README.md        # 基线认定 / 补丁清单 / 重放步骤 / 风险与冲突点
+│       └── NNNN-*.patch     # git format-patch 产物，可 git am 到该基线
 └── plugins/
     └── <plugin-name>/       # 一个目录 = 一个插件
         ├── package.json     # 包名约定: @deepseek-ai/dsh-client-<name>
@@ -22,6 +28,25 @@ dsh-plugins/
             ├── vendor-types.d.ts     # 对 @deepseek-ai/* 的最小类型垫片（仅构建用）
             └── ...
 ```
+
+## 补丁集（`patches/`）
+
+本机 DSH 相对上游的**全部本地侵入式修改**以 `git format-patch` 形式归档于此，便于在新检出
+或新上游版本上重放。约定：
+
+- **一个上游基线一个子目录**，目录名 = 基线版本（如 `patches/dsh-0.2.0-rc.1/`）；补丁集**只用
+  main 这一条线**，不为每个版本开分支。
+- 每目录内必有 `README.md`，记录**基线认定依据**（为什么是这个提交）、逐笔的
+  「改了什么 / 涉及文件 / 如何应用 / 风险与冲突点」、验证结果与"在新上游版本上重放"的步骤。
+- 补丁用 `git am` 应用（`git am --3way` 兜底），需在 **deepseek-harness 仓库根目录**执行。
+
+| 目录 | 上游基线 | 笔数 | 状态 |
+|---|---|---|---|
+| `patches/dsh-0.2.0-rc.1/` | `4878cdabd8`（tag `dsh-v0.2.0-rc.1`） | 2 | **当前** |
+| `patches/dsh-0.1.2-rc.1/` | `76fda7297` | 1 | 历史存档，勿再往 0.2.0+ 重放 |
+
+⚠️ 应用 `dsh-0.2.0-rc.1/0002-*` 前先看该目录 README 的「与插件 `subagent-newest-first` 互斥」
+一节——那个插件会 shadow 掉上游同一个单值槽位，必须从 profile 退役，否则补丁的改动不可见。
 
 ## 新增插件的流程
 

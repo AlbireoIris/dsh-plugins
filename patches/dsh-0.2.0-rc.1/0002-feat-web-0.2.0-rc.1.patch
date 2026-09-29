@@ -1,0 +1,252 @@
+From 80a85c5d0a7f650f3027ba64aa12c677ac4999dc Mon Sep 17 00:00:00 2001
+From: zhululin1 <zhululin1@xiaomi.com>
+Date: Tue, 29 Sep 2026 15:29:37 +0800
+Subject: [PATCH 2/2] =?UTF-8?q?feat(web):=20=E5=AD=90=E4=BB=A3=E7=90=86?=
+ =?UTF-8?q?=E7=9B=AE=E5=BD=95=E8=A1=8C=E6=8C=89=E6=9C=80=E6=96=B0=E5=88=9B?=
+ =?UTF-8?q?=E5=BB=BA=E4=BC=98=E5=85=88=E6=8E=92=E5=BA=8F=E5=B9=B6=E9=80=82?=
+ =?UTF-8?q?=E9=85=8D=200.2.0-rc.1=20=E5=9F=BA=E7=BA=BF?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+承接 a1148836a3（0.1.6-alpha.1 树），把子代理目录的“最新创建优先”重做到
+0.2.0-rc.1：CatalogRows 把目录条目 toReversed() 后渲染，最新创建的子代理
+排在每一层最前。
+
+持久化契约不动：SubagentListEntry 与 catalog.ts 的 subagentCatalogEntries()
+仍按创建时间升序返回（@returns current direct-child rows in parent catalog
+event order），反转只发生在呈现层，服务端 catalog.spec.ts 未改。
+
+未用 git apply：0.2.0-rc.1 的组件与测试均已重构，hunk 上下文失配。
+- 0.2.0 的 CatalogRows 改用 isKnownLeaf(catalogs[entry.id]) 判叶子，不再读
+  entry.hasChildren / entry.kind，SubagentCatalogRow 亦无这两个字段。
+- 0.1.x 的 setCatalogOpen 已被 refreshProjection 取代，新用例插入点改到
+  'renders stable rows and catalog-addressed navigation' 之后。
+改为按补丁语义定点改写两处代码 + 三处测试断言。
+
+测试期望值随顺序反转调整：键盘遍历（ArrowDown/End/Home/ArrowUp）与“从树外
+导航”两条既有用例的 worker/reviewer 期望互换；新增
+'renders catalog rows newest-created first' 固定每层 newest/middle/oldest
+的顺序。触发器可访问名用的是运行中计数（runningCountKey），该用例三条条目
+全 inactive，故按总数口径查“3 个子智能体”。
+
+README 与 feature Agent Note 双语同步（i18n 配对 hash 经
+pnpm run verify-translation-pairing --write 重录；0.2.0 起为按 section 哈希，
+故 yaml 变更行数多于旧补丁）。
+
+验证：vitest packages/client/ui-subagent/tests + packages/subagent/subagent/tests
+375/375 通过；pnpm run typecheck rc=0；pnpm run test:docs 20/20 通过。
+
+Co-Authored-By: Claude Code <noreply@anthropic.com>
+---
+ ...07-27-web-subagent-conversations.i18n.yaml |  8 +++---
+ .../2026-07-27-web-subagent-conversations.md  |  4 +--
+ ...026-07-27-web-subagent-conversations.zh.md |  4 +--
+ packages/client/ui-subagent/README.i18n.yaml  |  4 +--
+ packages/client/ui-subagent/README.md         |  2 +-
+ packages/client/ui-subagent/README.zh.md      |  2 +-
+ .../src/client/SubagentHeaderLineage.tsx      |  8 ++++--
+ .../tests/conversation-ui.client.spec.tsx     | 25 +++++++++++++++----
+ 8 files changed, 38 insertions(+), 19 deletions(-)
+
+diff --git a/.agents/notes/implemented/feature/2026-07-27-web-subagent-conversations.i18n.yaml b/.agents/notes/implemented/feature/2026-07-27-web-subagent-conversations.i18n.yaml
+index e811b85577..15db9781cb 100644
+--- a/.agents/notes/implemented/feature/2026-07-27-web-subagent-conversations.i18n.yaml
++++ b/.agents/notes/implemented/feature/2026-07-27-web-subagent-conversations.i18n.yaml
+@@ -12,8 +12,8 @@
+   en: 8892eea7f62d45ed
+   zh: 18f64966ff53e38b
+ /agent-note-web-subagent-catalog-and-human-continuation/design-context:
+-  en: da3858c86cf685ff
+-  zh: b13ee4f45e3dff7d
++  en: 3a5ff3f073fff0b7
++  zh: 2aa2b5c490fe52c2
+ /agent-note-web-subagent-catalog-and-human-continuation/product-contract:
+   en: 2060d607d1cd1ef3
+   zh: e7100887358625c4
+@@ -30,8 +30,8 @@
+   en: 427f0a8ace8ad692
+   zh: 876771621858f77d
+ /agent-note-web-subagent-catalog-and-human-continuation/testing:
+-  en: 0c2f7f5cc473ecff
+-  zh: 00b2c22e109b3429
++  en: ae05fe3a35884562
++  zh: 2507cf69e12028c0
+ /agent-note-web-subagent-catalog-and-human-continuation/consequences:
+   en: 143fc76c6d09e8fb
+   zh: 01a042fb32b0d6e0
+diff --git a/.agents/notes/implemented/feature/2026-07-27-web-subagent-conversations.md b/.agents/notes/implemented/feature/2026-07-27-web-subagent-conversations.md
+index ba72e31d88..090906255f 100644
+--- a/.agents/notes/implemented/feature/2026-07-27-web-subagent-conversations.md
++++ b/.agents/notes/implemented/feature/2026-07-27-web-subagent-conversations.md
+@@ -32,7 +32,7 @@ The Figma subagent list, hierarchical expansion, and child conversation frames a
+ 
+ | Design intent | Shipped contract |
+ | --- | --- |
+-| The session header opens a compact child list. | The trigger counts healthy direct entries returned by the parent catalog service. |
++| The session header opens a compact child list. | The trigger counts healthy direct entries returned by the parent catalog service; the tree presents those entries newest-created first (the service's creation-ascending order reversed). |
+ | Selecting a row reuses the conversation UI. | Addressed history never activates the child; only a continuable row with a live parent retains the ordinary composer. |
+ | Nested agents expand progressively. | A row remains expandable until its own catalog has loaded empty; expansion loads only that direct catalog and retains the row's parent address. |
+ | Rows show labels, state, usage, and active duration without duplicating sidebar rows. | Mode and `running`/`inactive` activity are textual as well as visual; optional title, durable token usage, and active-turn duration come from the list's retained projection values. Compact duration loses smaller units above one day, while hover and accessible naming retain exact whole seconds. `SessionHeader.origin` removes duplicate navigation rows but grants no capability. |
+@@ -106,7 +106,7 @@ The shipped Web composition mounts SQLite session query beside JSONL persistence
+ - Host protocol tests pin healthy direct catalog schemas, id echoing, mode verification, non-activating history, exact-parent enforcement, FIFO admission receipts, cancellation, and sanitized failure mapping.
+ - Generic Host tests pin attached and cold history and forks without Agent publication, cold projection folding, descriptor/origin/runtime-owner denial, explicit-id adoption denial, and the direct queue-control fence.
+ - Client object tests pin retained and restored addresses, one-shot read-only and cancel rejection, history routing, continuable prompt and interrupt routing, suppression of Agent-bound model controls, live activity from Session summaries and Agent disposal, authoritative catalog membership, and membership refresh.
+-- jsdom tests pin the ordinary-title separator, per-level combined subagent-title switchers, 12px nested titles, current and ancestor styling, selected-row weight, catalog-label precedence, hover delay, upward-click suppression, truncation with a retained chevron, direct counts and activity from catalogs, sidebar direct-child activity, row-status precedence, token totals, second-precision running and frozen inactive durations, adaptive long-duration units with exact accessible text, generic loading, mixed-mode rows, ready-empty leaf detection, lazy descendant disclosure, direct-parent addresses, keyboard behavior, and both read-only reasons.
++- jsdom tests pin the ordinary-title separator, per-level combined subagent-title switchers, 12px nested titles, current and ancestor styling, selected-row weight, catalog-label precedence, newest-first row order at every catalog level, hover delay, upward-click suppression, truncation with a retained chevron, direct counts and activity from catalogs, sidebar direct-child activity, row-status precedence, token totals, second-precision running and frozen inactive durations, adaptive long-duration units with exact accessible text, generic loading, mixed-mode rows, ready-empty leaf detection, lazy descendant disclosure, direct-parent addresses, keyboard behavior, and both read-only reasons.
+ - The keyless assembled Web snapshot contains an inactive continuable child with durable usage, an inactive one-shot sibling with a deterministic long duration, and a persisted grandchild; it pins direct catalog counts, usage and timing rows, adaptive long-duration presentation, and lazy nested expansion, opens persisted history without activation, admits a human FIFO follow-up, reconciles child mux events, and proves one-shot history remains read-only. A separate assembled scenario holds a real child Agent turn at the LLM seam while it pins the direct running state in both the header and visible idle owner row, then cancels the turn during teardown.
+ - Navigation tests pin subagent-only breadcrumbs, workspace placement for forks created from subagents, and `origin: 'subagent'` sidebar filtering without hiding ordinary forks.
+ 
+diff --git a/.agents/notes/implemented/feature/2026-07-27-web-subagent-conversations.zh.md b/.agents/notes/implemented/feature/2026-07-27-web-subagent-conversations.zh.md
+index a3841b05fb..fb538f018e 100644
+--- a/.agents/notes/implemented/feature/2026-07-27-web-subagent-conversations.zh.md
++++ b/.agents/notes/implemented/feature/2026-07-27-web-subagent-conversations.zh.md
+@@ -32,7 +32,7 @@ Figma 中的 subagent 列表、层级展开与 child 对话画框是非规范性
+ 
+ | 设计意图 | 已交付约定 |
+ | --- | --- |
+-| 会话页头可打开紧凑的 child 列表。 | 触发器统计 parent catalog service 返回的健康直接条目。 |
++| 会话页头可打开紧凑的 child 列表。 | 触发器统计 parent catalog service 返回的健康直接条目；树按创建时间从新到旧呈现这些条目（将服务端的创建升序反转）。 |
+ | 选择一行会复用对话 UI。 | 已寻址历史绝不激活 child；只有 parent 存活的可继续行才保留普通输入框。 |
+ | 嵌套 agent 会逐层展开。 | row 在自身 catalog 成功加载为空前保持可展开；展开时只加载该直接 catalog，并保留 row 的 parent 地址。 |
+ | 条目显示 label、状态、token 用量与活跃耗时，同时避免侧边栏条目重复。 | mode 与 `running`／`inactive` 活动状态会同时以文字和视觉呈现；可选 title、持久化 token 用量与活跃轮次耗时来自列表保留的投影值。紧凑耗时从一天起省略更小的单位，而悬停和无障碍名称仍保留精确的整秒数。`SessionHeader.origin` 会移除重复的导航条目，但不授予任何能力。 |
+@@ -106,7 +106,7 @@ Session Controller 负责 catalog 与 history read；`@deepseek-ai/dsh-subagent`
+ - 宿主协议测试固定健康的直接 catalog schema、id 回显、mode 校验、非激活式历史、确切 parent 强制要求、FIFO 准入回执、取消与脱敏后的失败映射。
+ - 通用 Host 测试固定在不发布 Agent 的情况下读取已附加与冷态历史及执行 fork、冷态投影归并、按描述符／origin／运行时 owner 拒绝、拒绝显式 id 接纳，以及直接队列控制栅栏。
+ - 客户端对象测试固定已保留与已恢复的地址、one-shot 只读与取消拒绝、历史路由、可继续提示词与中断路由、屏蔽绑定到 agent 的模型控件、来自 Session 摘要与 Agent 销毁的实时活动状态、权威 catalog membership 与成员刷新。
+-- jsdom 测试固定普通 title 分隔符、逐级合并的 subagent title 切换热区、嵌套 title 的 12px 字号、当前与祖先样式、选中行字重、目录 label 优先级、悬停延迟、向上点击抑制、保留箭头的截断、catalog 直接计数与 activity、侧边栏直接 child activity、行状态优先级、token 用量总计、精确到秒的运行中耗时与冻结后 inactive 耗时、采用自适应单位的长耗时及其精确无障碍文本、通用加载提示、混合 mode row、ready-empty 叶子判定、descendant 懒加载展开、直接 parent 地址、键盘行为与两种只读原因。
++- jsdom 测试固定普通 title 分隔符、逐级合并的 subagent title 切换热区、嵌套 title 的 12px 字号、当前与祖先样式、选中行字重、目录 label 优先级、每个目录层级从新到旧的行序、悬停延迟、向上点击抑制、保留箭头的截断、catalog 直接计数与 activity、侧边栏直接 child activity、行状态优先级、token 用量总计、精确到秒的运行中耗时与冻结后 inactive 耗时、采用自适应单位的长耗时及其精确无障碍文本、通用加载提示、混合 mode row、ready-empty 叶子判定、descendant 懒加载展开、直接 parent 地址、键盘行为与两种只读原因。
+ - 无密钥的组装 Web 快照包含一个具有持久化 token 用量的 inactive 可继续 child、一个具有确定性长耗时的 inactive one-shot sibling 和一个持久化 grandchild；它会固定直接 catalog 数量、token 用量与计时行、自适应长耗时呈现及嵌套懒加载，在不激活的情况下打开持久化历史、准入一条用户 FIFO 后续消息、归并 child mux 事件，并证明 one-shot 历史仍然只读。另一个独立的组装场景会在 LLM seam 处保持一个真实的 child Agent 轮次进行中，同时固定页头和可见空闲 owner row 中的直接运行状态，随后在 teardown 期间取消该轮次。
+ - 导航测试固定仅含 subagent 的面包屑导航、从 subagent 创建 fork 时的 Workspace 归属，以及 `origin: 'subagent'` 侧边栏过滤，同时不隐藏普通 fork。
+ 
+diff --git a/packages/client/ui-subagent/README.i18n.yaml b/packages/client/ui-subagent/README.i18n.yaml
+index 60769dea9e..b203de11f6 100644
+--- a/packages/client/ui-subagent/README.i18n.yaml
++++ b/packages/client/ui-subagent/README.i18n.yaml
+@@ -18,8 +18,8 @@
+   en: 06f6bac3153361f5
+   zh: e8b23941cbd16036
+ /deepseek-ai-dsh-client-ui-subagent/use-this-package/browsing-the-tree:
+-  en: 3508631091820123
+-  zh: ec7da9e5bedb22ba
++  en: fe8189edd46e2863
++  zh: ef0dbf9f08faf9aa
+ /deepseek-ai-dsh-client-ui-subagent/use-this-package/continuing-a-conversation:
+   en: 876e7152c8b9c4a6
+   zh: f89f5e2a812e8451
+diff --git a/packages/client/ui-subagent/README.md b/packages/client/ui-subagent/README.md
+index 037c84c9c8..268613c25b 100644
+--- a/packages/client/ui-subagent/README.md
++++ b/packages/client/ui-subagent/README.md
+@@ -33,7 +33,7 @@ This package registers the `dsh-resource://subagentchat/session/<child>?parent=<
+ 
+ Hovering a trigger opens its catalog after 150ms; leaving both trigger and catalog closes it after 120ms. Clicking the descendant-count trigger pins its catalog until outside click or Escape from the trigger or tree. Breadcrumb-title clicks navigate to the corresponding conversation.
+ 
+-Rows display mode plus activity and an optional log-backed title; running uses the shared ongoing loader, an inactive child whose latest closed turn completed normally uses the shared success dot, and other inactive children use the shared idle dot. Every row reserves the same 14px status column, centering smaller dots so titles align with the loader state. The compact header trigger vertically centers its activity glyph and count with a 4px gap. The trailing column stacks total durable provider usage above active-turn duration. Keyboard navigation works with ArrowRight/ArrowLeft to expand and collapse branches and ArrowUp/ArrowDown, Home, End, and Escape to navigate or close the tree. An unlabeled one-shot row falls back to its session id. A row is a known leaf only after its own catalog loads empty.
++Rows display mode plus activity and an optional log-backed title, newest-created first at every level (the durable listing arrives creation-ascending and the tree presents it reversed); running uses the shared ongoing loader, an inactive child whose latest closed turn completed normally uses the shared success dot, and other inactive children use the shared idle dot. Every row reserves the same 14px status column, centering smaller dots so titles align with the loader state. The compact header trigger vertically centers its activity glyph and count with a 4px gap. The trailing column stacks total durable provider usage above active-turn duration. Keyboard navigation works with ArrowRight/ArrowLeft to expand and collapse branches and ArrowUp/ArrowDown, Home, End, and Escape to navigate or close the tree. An unlabeled one-shot row falls back to its session id. A row is a known leaf only after its own catalog loads empty.
+ 
+ ### Continuing a conversation
+ 
+diff --git a/packages/client/ui-subagent/README.zh.md b/packages/client/ui-subagent/README.zh.md
+index e7c3fb052c..beba16d477 100644
+--- a/packages/client/ui-subagent/README.zh.md
++++ b/packages/client/ui-subagent/README.zh.md
+@@ -33,7 +33,7 @@ kind: "package-reference"
+ 
+ 悬停触发器 150ms 后打开目录；指针离开触发器和目录后，经过 120ms 关闭。点击后代数量触发器会固定目录，直到点击外部，或在触发器或树内按 Escape 关闭。点击面包屑标题会导航至对应会话。
+ 
+-行显示 mode、活动状态与由日志支撑的可选 title；running 使用共享 ongoing loading，最近一个已结束轮次正常完成的 inactive child 使用共享 success 绿点，其他 inactive child 使用共享 idle 灰点。每行都为状态图标预留相同的 14px 列宽，并将较小的圆点居中，使 title 与 loading 状态对齐。紧凑的页头触发器会垂直居中活动图标与数量，并保留 4px 水平间距。尾随列在上行显示提供方的持久化 token 用量总计，在下行显示活跃轮次耗时。键盘导航：ArrowRight/ArrowLeft 展开和折叠分支；ArrowUp/ArrowDown、Home、End 与 Escape 用于导航或关闭树。没有 label 的 one-shot 行回退到其会话 id。只有一行自身的目录加载为空后，它才是已知叶子。
++行显示 mode、活动状态与由日志支撑的可选 title，每一层级都按创建时间从新到旧排列（持久化列表按创建时间升序到达，目录树以反转顺序呈现）；running 使用共享 ongoing loading，最近一个已结束轮次正常完成的 inactive child 使用共享 success 绿点，其他 inactive child 使用共享 idle 灰点。每行都为状态图标预留相同的 14px 列宽，并将较小的圆点居中，使 title 与 loading 状态对齐。紧凑的页头触发器会垂直居中活动图标与数量，并保留 4px 水平间距。尾随列在上行显示提供方的持久化 token 用量总计，在下行显示活跃轮次耗时。键盘导航：ArrowRight/ArrowLeft 展开和折叠分支；ArrowUp/ArrowDown、Home、End 与 Escape 用于导航或关闭树。没有 label 的 one-shot 行回退到其会话 id。只有一行自身的目录加载为空后，它才是已知叶子。
+ 
+ ### 续接对话
+ 
+diff --git a/packages/client/ui-subagent/src/client/SubagentHeaderLineage.tsx b/packages/client/ui-subagent/src/client/SubagentHeaderLineage.tsx
+index cca800677c..e1671f42a0 100644
+--- a/packages/client/ui-subagent/src/client/SubagentHeaderLineage.tsx
++++ b/packages/client/ui-subagent/src/client/SubagentHeaderLineage.tsx
+@@ -197,7 +197,7 @@ function isKnownLeaf(catalog: SubagentCatalogSnapshot | undefined): boolean {
+   return catalog?.state === 'ready' && catalog.entries.length === 0
+ }
+ 
+-/** Render one catalog level and recurse only through explicitly expanded rows. */
++/** Render one catalog level, newest child first, recursing only through explicitly expanded rows. */
+ function CatalogRows({
+   parentSessionId, currentSessionId, catalog, catalogs, summaries, expanded, level,
+   openChild, openChildAside, refreshProjection, toggleBranch, closeCatalog, t,
+@@ -211,6 +211,10 @@ function CatalogRows({
+   }, [running])
+   const emptyLoading = catalog.state === 'loading' && catalog.entries.length === 0
+   const reserveDisclosure = catalog.entries.some(entry => !isKnownLeaf(catalogs[entry.id]))
++  // The durable listing contract orders entries by creation time ascending
++  // (SubagentListEntry); the catalog presents that order reversed, so the
++  // newest child leads every level.
++  const rows = catalog.entries.toReversed()
+   return (
+     <>
+       {emptyLoading && (
+@@ -229,7 +233,7 @@ function CatalogRows({
+           </button>
+         </div>
+       )}
+-      {catalog.entries.map((entry) => {
++      {rows.map((entry) => {
+         const childCatalog = catalogs[entry.id]
+         const isCurrent = entry.id === currentSessionId
+         const isExpanded = expanded.has(entry.id)
+diff --git a/packages/client/ui-subagent/tests/conversation-ui.client.spec.tsx b/packages/client/ui-subagent/tests/conversation-ui.client.spec.tsx
+index 5e0401e33e..f644889044 100644
+--- a/packages/client/ui-subagent/tests/conversation-ui.client.spec.tsx
++++ b/packages/client/ui-subagent/tests/conversation-ui.client.spec.tsx
+@@ -269,6 +269,21 @@ describe('SubagentHeaderLineage', () => {
+     })
+   })
+ 
++  it('renders catalog rows newest-created first', () => {
++    // The durable listing arrives ordered by creation time ascending; the
++    // catalog must present that order reversed at every level.
++    const entries = [
++      { id: 'oldest' as SessionId, mode: 'continuable' as const, label: 'oldest', activity: 'inactive' as const },
++      { id: 'middle' as SessionId, mode: 'one-shot' as const, label: 'middle', activity: 'inactive' as const },
++      { id: 'newest' as SessionId, mode: 'one-shot' as const, label: 'newest', activity: 'inactive' as const },
++    ]
++    render(<HeaderCatalog {...props(catalog({ entries }))} />)
++    hoverCatalog(screen.getByRole('button', { name: /3 个子智能体/ }))
++
++    const labels = screen.getAllByRole('treeitem').map(row => row.getAttribute('aria-label'))
++    expect(labels.map(label => label?.split(' ')[0])).toEqual(['newest', 'middle', 'oldest'])
++  })
++
+   it('selects singular count keys for one direct child', () => {
+     const base = props(catalog({
+       entries: [{
+@@ -310,14 +325,14 @@ describe('SubagentHeaderLineage', () => {
+     const trigger = screen.getByRole('button', { name: /1 个子智能体，正在运行/ })
+     fireEvent.keyDown(trigger, { key: 'ArrowDown' })
+     await Promise.resolve()
+-    expect(document.activeElement).toBe(screen.getByRole('treeitem', { name: /worker/ }))
++    expect(document.activeElement).toBe(screen.getByRole('treeitem', { name: /reviewer/ }))
+ 
+     fireEvent.keyDown(document.activeElement as Element, { key: 'End' })
+-    expect(document.activeElement).toBe(screen.getByRole('treeitem', { name: /reviewer/ }))
+-    fireEvent.keyDown(document.activeElement as Element, { key: 'Home' })
+     expect(document.activeElement).toBe(screen.getByRole('treeitem', { name: /worker/ }))
+-    fireEvent.keyDown(document.activeElement as Element, { key: 'ArrowUp' })
++    fireEvent.keyDown(document.activeElement as Element, { key: 'Home' })
+     expect(document.activeElement).toBe(screen.getByRole('treeitem', { name: /reviewer/ }))
++    fireEvent.keyDown(document.activeElement as Element, { key: 'ArrowUp' })
++    expect(document.activeElement).toBe(screen.getByRole('treeitem', { name: /worker/ }))
+     fireEvent.keyDown(document.activeElement as Element, { key: 'Escape' })
+     await Promise.resolve()
+     expect(screen.queryByRole('tree')).toBeNull()
+@@ -833,7 +848,7 @@ describe('SubagentHeaderLineage', () => {
+     const trigger = screen.getByRole('button', { name: /1 个子智能体，正在运行/ })
+     hoverCatalog(trigger)
+     fireEvent.keyDown(screen.getByRole('tree'), { key: 'ArrowUp' })
+-    expect(document.activeElement).toBe(screen.getByRole('treeitem', { name: /reviewer/ }))
++    expect(document.activeElement).toBe(screen.getByRole('treeitem', { name: /worker/ }))
+     fireEvent.keyDown(trigger, { key: 'ArrowDown' })
+     view.unmount()
+     await Promise.resolve()
+-- 
+2.43.0
+
