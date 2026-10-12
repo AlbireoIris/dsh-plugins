@@ -1,0 +1,161 @@
+From 9350ffe1d73a6ac33df2878beba656e13a38aa34 Mon Sep 17 00:00:00 2001
+From: zhululin1 <zhululin1@xiaomi.com>
+Date: Mon, 12 Oct 2026 10:34:29 +0800
+Subject: [PATCH 2/2] =?UTF-8?q?feat(web):=20=E5=AD=90=E4=BB=A3=E7=90=86?=
+ =?UTF-8?q?=E7=9B=AE=E5=BD=95=E8=A1=8C=E6=8C=89=E6=9C=80=E6=96=B0=E5=88=9B?=
+ =?UTF-8?q?=E5=BB=BA=E4=BC=98=E5=85=88=E6=8E=92=E5=BA=8F?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+SubagentListEntry 的持久化契约按创建时间升序返回，目录需要把这个顺序反转后再
+呈现，让最新创建的子代理排在每一层的最前。
+
+反转只在呈现层（catalog.entries.toReversed()），持久化列表契约不变；键盘导航
+按 DOM 顺序遍历，因此与反转后的呈现一致。测试新增 "renders catalog rows
+newest-created first"，并把遍历与延迟聚焦断言改为反转后的顺序。
+
+README（中英）同步说明行序，i18n 配对 hash 经
+pnpm run verify-translation-pairing --write 重录。
+
+补丁原带的 Agent Note 部分不再回收：该 note 已被上游归档到
+.agents/notes/archived/feature/（归档件冻结，不得改写）。
+---
+ packages/client/ui-subagent/README.i18n.yaml  |  4 +--
+ packages/client/ui-subagent/README.md         |  2 +-
+ packages/client/ui-subagent/README.zh.md      |  2 +-
+ .../src/client/SubagentHeaderLineage.tsx      |  8 ++++--
+ .../tests/conversation-ui.client.spec.tsx     | 25 +++++++++++++++----
+ 5 files changed, 30 insertions(+), 11 deletions(-)
+
+diff --git a/packages/client/ui-subagent/README.i18n.yaml b/packages/client/ui-subagent/README.i18n.yaml
+index 5bf8a6dee4..afd3b648f4 100644
+--- a/packages/client/ui-subagent/README.i18n.yaml
++++ b/packages/client/ui-subagent/README.i18n.yaml
+@@ -18,8 +18,8 @@
+   en: 9a72f6fbd3828d1f
+   zh: e8b23941cbd16036
+ /deepseek-ai-dsh-client-ui-subagent/use-this-package/browsing-the-tree:
+-  en: 3508631091820123
+-  zh: ec7da9e5bedb22ba
++  en: fe8189edd46e2863
++  zh: ef0dbf9f08faf9aa
+ /deepseek-ai-dsh-client-ui-subagent/use-this-package/continuing-a-conversation:
+   en: 876e7152c8b9c4a6
+   zh: f89f5e2a812e8451
+diff --git a/packages/client/ui-subagent/README.md b/packages/client/ui-subagent/README.md
+index 30cea03817..8d2db6d5dc 100644
+--- a/packages/client/ui-subagent/README.md
++++ b/packages/client/ui-subagent/README.md
+@@ -33,7 +33,7 @@ This package registers the `dsh-resource://subagentchat/session/<child>?parent=<
+ 
+ Hovering a trigger opens its catalog after 150ms; leaving both trigger and catalog closes it after 120ms. Clicking the descendant-count trigger pins its catalog until outside click or Escape from the trigger or tree. Breadcrumb-title clicks navigate to the corresponding conversation.
+ 
+-Rows display mode plus activity and an optional log-backed title; running uses the shared ongoing loader, an inactive child whose latest closed turn completed normally uses the shared success dot, and other inactive children use the shared idle dot. Every row reserves the same 14px status column, centering smaller dots so titles align with the loader state. The compact header trigger vertically centers its activity glyph and count with a 4px gap. The trailing column stacks total durable provider usage above active-turn duration. Keyboard navigation works with ArrowRight/ArrowLeft to expand and collapse branches and ArrowUp/ArrowDown, Home, End, and Escape to navigate or close the tree. An unlabeled one-shot row falls back to its session id. A row is a known leaf only after its own catalog loads empty.
++Rows display mode plus activity and an optional log-backed title, newest-created first at every level (the durable listing arrives creation-ascending and the tree presents it reversed); running uses the shared ongoing loader, an inactive child whose latest closed turn completed normally uses the shared success dot, and other inactive children use the shared idle dot. Every row reserves the same 14px status column, centering smaller dots so titles align with the loader state. The compact header trigger vertically centers its activity glyph and count with a 4px gap. The trailing column stacks total durable provider usage above active-turn duration. Keyboard navigation works with ArrowRight/ArrowLeft to expand and collapse branches and ArrowUp/ArrowDown, Home, End, and Escape to navigate or close the tree. An unlabeled one-shot row falls back to its session id. A row is a known leaf only after its own catalog loads empty.
+ 
+ ### Continuing a conversation
+ 
+diff --git a/packages/client/ui-subagent/README.zh.md b/packages/client/ui-subagent/README.zh.md
+index 0479608885..12bfee18bc 100644
+--- a/packages/client/ui-subagent/README.zh.md
++++ b/packages/client/ui-subagent/README.zh.md
+@@ -33,7 +33,7 @@ kind: "package-reference"
+ 
+ 悬停触发器 150ms 后打开目录；指针离开触发器和目录后，经过 120ms 关闭。点击后代数量触发器会固定目录，直到点击外部，或在触发器或树内按 Escape 关闭。点击面包屑标题会导航至对应会话。
+ 
+-行显示 mode、活动状态与由日志支撑的可选 title；running 使用共享 ongoing loading，最近一个已结束轮次正常完成的 inactive child 使用共享 success 绿点，其他 inactive child 使用共享 idle 灰点。每行都为状态图标预留相同的 14px 列宽，并将较小的圆点居中，使 title 与 loading 状态对齐。紧凑的页头触发器会垂直居中活动图标与数量，并保留 4px 水平间距。尾随列在上行显示提供方的持久化 token 用量总计，在下行显示活跃轮次耗时。键盘导航：ArrowRight/ArrowLeft 展开和折叠分支；ArrowUp/ArrowDown、Home、End 与 Escape 用于导航或关闭树。没有 label 的 one-shot 行回退到其会话 id。只有一行自身的目录加载为空后，它才是已知叶子。
++行显示 mode、活动状态与由日志支撑的可选 title，每一层级都按创建时间从新到旧排列（持久化列表按创建时间升序到达，目录树以反转顺序呈现）；running 使用共享 ongoing loading，最近一个已结束轮次正常完成的 inactive child 使用共享 success 绿点，其他 inactive child 使用共享 idle 灰点。每行都为状态图标预留相同的 14px 列宽，并将较小的圆点居中，使 title 与 loading 状态对齐。紧凑的页头触发器会垂直居中活动图标与数量，并保留 4px 水平间距。尾随列在上行显示提供方的持久化 token 用量总计，在下行显示活跃轮次耗时。键盘导航：ArrowRight/ArrowLeft 展开和折叠分支；ArrowUp/ArrowDown、Home、End 与 Escape 用于导航或关闭树。没有 label 的 one-shot 行回退到其会话 id。只有一行自身的目录加载为空后，它才是已知叶子。
+ 
+ ### 续接对话
+ 
+diff --git a/packages/client/ui-subagent/src/client/SubagentHeaderLineage.tsx b/packages/client/ui-subagent/src/client/SubagentHeaderLineage.tsx
+index 611557c923..0bebbf7432 100644
+--- a/packages/client/ui-subagent/src/client/SubagentHeaderLineage.tsx
++++ b/packages/client/ui-subagent/src/client/SubagentHeaderLineage.tsx
+@@ -197,7 +197,7 @@ function isKnownLeaf(catalog: SubagentCatalogSnapshot | undefined): boolean {
+   return catalog?.state === 'ready' && catalog.entries.length === 0
+ }
+ 
+-/** Render one catalog level and recurse only through explicitly expanded rows. */
++/** Render one catalog level, newest child first, recursing only through explicitly expanded rows. */
+ function CatalogRows({
+   parentSessionId, currentSessionId, catalog, catalogs, summaries, expanded, level,
+   openChild, openChildAside, refreshProjection, toggleBranch, closeCatalog, t,
+@@ -214,6 +214,10 @@ function CatalogRows({
+     entry.mode !== 'external' && !isKnownLeaf(catalogs[entry.id])
+     && summaries[entry.id]?.formatStatus !== 'migration-required'
+     && catalogs[entry.id]?.state !== 'migration-required')
++  // The durable listing contract orders entries by creation time ascending
++  // (SubagentListEntry); the catalog presents that order reversed, so the
++  // newest child leads every level.
++  const rows = catalog.entries.toReversed()
+   return (
+     <>
+       {emptyLoading && (
+@@ -232,7 +236,7 @@ function CatalogRows({
+           </button>
+         </div>
+       )}
+-      {catalog.entries.map((entry) => {
++      {rows.map((entry) => {
+         const external = entry.mode === 'external'
+         const childCatalog = catalogs[entry.id]
+         const isCurrent = entry.id === currentSessionId
+diff --git a/packages/client/ui-subagent/tests/conversation-ui.client.spec.tsx b/packages/client/ui-subagent/tests/conversation-ui.client.spec.tsx
+index dac2d9e053..8f2b4ef70f 100644
+--- a/packages/client/ui-subagent/tests/conversation-ui.client.spec.tsx
++++ b/packages/client/ui-subagent/tests/conversation-ui.client.spec.tsx
+@@ -274,6 +274,21 @@ describe('SubagentHeaderLineage', () => {
+     })
+   })
+ 
++  it('renders catalog rows newest-created first', () => {
++    // The durable listing arrives ordered by creation time ascending; the
++    // catalog must present that order reversed at every level.
++    const entries = [
++      { id: 'oldest' as SessionId, mode: 'continuable' as const, label: 'oldest', activity: 'inactive' as const },
++      { id: 'middle' as SessionId, mode: 'one-shot' as const, label: 'middle', activity: 'inactive' as const },
++      { id: 'newest' as SessionId, mode: 'one-shot' as const, label: 'newest', activity: 'inactive' as const },
++    ]
++    render(<HeaderCatalog {...props(catalog({ entries }))} />)
++    hoverCatalog(screen.getByRole('button', { name: /3 个子智能体/ }))
++
++    const labels = screen.getAllByRole('treeitem').map(row => row.getAttribute('aria-label'))
++    expect(labels.map(label => label?.split(' ')[0])).toEqual(['newest', 'middle', 'oldest'])
++  })
++
+   it('selects singular count keys for one direct child', () => {
+     const base = props(catalog({
+       entries: [{
+@@ -315,14 +330,14 @@ describe('SubagentHeaderLineage', () => {
+     const trigger = screen.getByRole('button', { name: /1 个子智能体，正在运行/ })
+     fireEvent.keyDown(trigger, { key: 'ArrowDown' })
+     await Promise.resolve()
+-    expect(document.activeElement).toBe(screen.getByRole('treeitem', { name: /worker/ }))
++    expect(document.activeElement).toBe(screen.getByRole('treeitem', { name: /reviewer/ }))
+ 
+     fireEvent.keyDown(document.activeElement as Element, { key: 'End' })
+-    expect(document.activeElement).toBe(screen.getByRole('treeitem', { name: /reviewer/ }))
+-    fireEvent.keyDown(document.activeElement as Element, { key: 'Home' })
+     expect(document.activeElement).toBe(screen.getByRole('treeitem', { name: /worker/ }))
+-    fireEvent.keyDown(document.activeElement as Element, { key: 'ArrowUp' })
++    fireEvent.keyDown(document.activeElement as Element, { key: 'Home' })
+     expect(document.activeElement).toBe(screen.getByRole('treeitem', { name: /reviewer/ }))
++    fireEvent.keyDown(document.activeElement as Element, { key: 'ArrowUp' })
++    expect(document.activeElement).toBe(screen.getByRole('treeitem', { name: /worker/ }))
+     fireEvent.keyDown(document.activeElement as Element, { key: 'Escape' })
+     await Promise.resolve()
+     expect(screen.queryByRole('tree')).toBeNull()
+@@ -1018,7 +1033,7 @@ describe('SubagentHeaderLineage', () => {
+     const trigger = screen.getByRole('button', { name: /1 个子智能体，正在运行/ })
+     hoverCatalog(trigger)
+     fireEvent.keyDown(screen.getByRole('tree'), { key: 'ArrowUp' })
+-    expect(document.activeElement).toBe(screen.getByRole('treeitem', { name: /reviewer/ }))
++    expect(document.activeElement).toBe(screen.getByRole('treeitem', { name: /worker/ }))
+     fireEvent.keyDown(trigger, { key: 'ArrowDown' })
+     view.unmount()
+     await Promise.resolve()
+-- 
+2.43.0
+

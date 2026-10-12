@@ -42,11 +42,13 @@ dsh-plugins/
 
 | 目录 | 上游基线 | 笔数 | 状态 |
 |---|---|---|---|
-| `patches/dsh-0.2.0-rc.1/` | `4878cdabd8`（tag `dsh-v0.2.0-rc.1`） | 2 | **当前** |
+| `patches/dsh-0.2.1-alpha.2/` | `d743267388`（tag `dsh-v0.2.1-alpha.2`） | 2 | **当前** |
+| `patches/dsh-0.2.0-rc.1/` | `4878cdabd8`（tag `dsh-v0.2.0-rc.1`） | 2 | 历史存档（alpha.2 集是重做，非增量） |
 | `patches/dsh-0.1.2-rc.1/` | `76fda7297` | 1 | 历史存档，勿再往 0.2.0+ 重放 |
 
-⚠️ 应用 `dsh-0.2.0-rc.1/0002-*` 前先看该目录 README 的「与插件 `subagent-newest-first` 互斥」
-一节——那个插件会 shadow 掉上游同一个单值槽位，必须从 profile 退役，否则补丁的改动不可见。
+⚠️ 应用任一含 `0002`（子代理目录行最新创建优先）的补丁集前，先看该目录 README 的「与插件
+`subagent-newest-first` 互斥」一节——那个插件会 shadow 掉上游同一个单值槽位，必须从 profile
+退役，否则补丁的改动不可见。
 
 ## 新增插件的流程
 
