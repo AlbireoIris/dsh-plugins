@@ -42,9 +42,14 @@ dsh-plugins/
 
 | 目录 | 上游基线 | 笔数 | 状态 |
 |---|---|---|---|
-| `patches/dsh-0.2.1-alpha.2/` | `d743267388`（tag `dsh-v0.2.1-alpha.2`） | 2 | **当前** |
-| `patches/dsh-0.2.0-rc.1/` | `4878cdabd8`（tag `dsh-v0.2.0-rc.1`） | 2 | 历史存档（alpha.2 集是重做，非增量） |
+| `patches/dsh-0.2.1-alpha.4/` | `86a402200d`（tag `dsh-v0.2.1-alpha.4`） | 2 | **当前** |
+| `patches/dsh-0.2.1-alpha.2/` | `d743267388`（tag `dsh-v0.2.1-alpha.2`） | 2 | 历史存档（alpha.4 集是重做，非增量，中间隔 941 个提交） |
+| `patches/dsh-0.2.0-rc.1/` | `4878cdabd8`（tag `dsh-v0.2.0-rc.1`） | 2 | 历史存档 |
 | `patches/dsh-0.1.2-rc.1/` | `76fda7297` | 1 | 历史存档，勿再往 0.2.0+ 重放 |
+
+自 alpha.4 集起，**回合末回复守卫不再随补丁集走**：它在 alpha.2 时期是本机工作区的未提交树内
+改动，本次（2026-10-16）已移植为外部插件 `plugins/final-reply-guard/`，与补丁解耦，上游更新时
+不再需要重放（移植口径与证据见 `patches/dsh-0.2.1-alpha.4/README.md`）。
 
 ⚠️ 应用任一含 `0002`（子代理目录行最新创建优先）的补丁集前，先看该目录 README 的「与插件
 `subagent-newest-first` 互斥」一节——那个插件会 shadow 掉上游同一个单值槽位，必须从 profile
