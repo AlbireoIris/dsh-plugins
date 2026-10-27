@@ -42,7 +42,8 @@ dsh-plugins/
 
 | 目录 | 上游基线 | 笔数 | 状态 |
 |---|---|---|---|
-| `patches/dsh-0.2.1-rc.2/` | `687f282e86`（tag `dsh-v0.2.1-rc.2`） | 2 | **当前** |
+| `patches/dsh-master-22ddee37/` | `22ddee3792`（master 顶端，非 tag；自报版本 0.2.1-rc.3） | 2 | **当前** |
+| `patches/dsh-0.2.1-rc.2/` | `687f282e86`（tag `dsh-v0.2.1-rc.2`） | 2 | 历史存档（master-22ddee37 集是重做，非增量，中间隔 1539 个提交） |
 | `patches/dsh-0.2.1-alpha.4/` | `86a402200d`（tag `dsh-v0.2.1-alpha.4`） | 2 | 历史存档（rc.2 集是重做，非增量，中间隔 49 个提交） |
 | `patches/dsh-0.2.1-alpha.2/` | `d743267388`（tag `dsh-v0.2.1-alpha.2`） | 2 | 历史存档（alpha.4 集是重做，非增量，中间隔 941 个提交） |
 | `patches/dsh-0.2.0-rc.1/` | `4878cdabd8`（tag `dsh-v0.2.0-rc.1`） | 2 | 历史存档 |
