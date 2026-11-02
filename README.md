@@ -42,7 +42,8 @@ dsh-plugins/
 
 | 目录 | 上游基线 | 笔数 | 状态 |
 |---|---|---|---|
-| `patches/dsh-master-22ddee37/` | `22ddee3792`（master 顶端，非 tag；自报版本 0.2.1-rc.3） | 2 | **当前** |
+| `patches/dsh-master-ce7073d/` | `ce7073d512`（master 顶端，非 tag；版本 0.2.2-alpha.2） | 1 | **当前**（两笔能力合并在一个提交；并非只剩一笔改动） |
+| `patches/dsh-master-22ddee37/` | `22ddee3792`（master 顶端，非 tag；自报版本 0.2.1-rc.3） | 2 | 历史存档（ce7073d 集是重做，非增量，中间隔 988 个提交） |
 | `patches/dsh-0.2.1-rc.2/` | `687f282e86`（tag `dsh-v0.2.1-rc.2`） | 2 | 历史存档（master-22ddee37 集是重做，非增量，中间隔 1539 个提交） |
 | `patches/dsh-0.2.1-alpha.4/` | `86a402200d`（tag `dsh-v0.2.1-alpha.4`） | 2 | 历史存档（rc.2 集是重做，非增量，中间隔 49 个提交） |
 | `patches/dsh-0.2.1-alpha.2/` | `d743267388`（tag `dsh-v0.2.1-alpha.2`） | 2 | 历史存档（alpha.4 集是重做，非增量，中间隔 941 个提交） |
@@ -54,9 +55,9 @@ dsh-plugins/
 不再需要重放（移植口径与证据见 `patches/dsh-0.2.1-alpha.4/README.md`；rc.2 上的复核见
 `patches/dsh-0.2.1-rc.2/README.md`）。
 
-⚠️ 应用任一含 `0002`（子代理目录行最新创建优先）的补丁集前，先看该目录 README 的「与插件
-`subagent-newest-first` 互斥」一节——那个插件会 shadow 掉上游同一个单值槽位，必须从 profile
-退役，否则补丁的改动不可见。
+⚠️ 应用任一含子代理目录行排序改动（旧版 `0002`；master-ce7073d 起合并在 `0001` 内）的补丁集前，
+先看该目录 README 的「与插件 `subagent-newest-first` 互斥」一节——那个插件会 shadow 掉上游同一个
+单值槽位，必须从 profile 退役，否则补丁的改动不可见。
 
 ## 新增插件的流程
 
