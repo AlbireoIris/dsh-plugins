@@ -90,7 +90,7 @@ git am <本目录>/0001-feat-agent-team-spawn-model-and-web-master-ce7073d.patch
 |---|---|---|
 | `context-menu-target` | `MenuTarget` → `ContextMenuTarget`（无兼容别名）；`menuTarget` / `useMenuTarget` → `contextMenuTarget` / `useContextMenuTarget`；动作图标改为 `{ key, src? }` 经 `contextMenu.icon` Slot 渲染 | 插件源码扫描 **零命中**，无需改 |
 | `schedule-agent-tools` | 工具改为 `schedule_create` / `schedule_list` / `schedule_view` / `schedule_edit`；`schedule_update` / `schedule_delete` 移除；`schedule_create` 只收 `rrule` + `target`（`this_session`/`new_once`/`new`） | 插件源码扫描 **零命中**；`~/.agents/skills/startup/SKILL.md` 已迁移为 RRULE 新语法（mtime 10:08:16，格式已对照 `tool-schedule` 的 `RRULE_HELP` 校验） |
-| `schedule-remote-host-tasks` | Schedule 域**写 v2、读 v1**；存储布局不变；**首次成功的 v2 写会把 unit 标成 v2，之后 v1 二进制拒绝打开**，降级必须恢复备份 | 本机 `~/.dsh/storages/schedule.json` 仍为 v1（mtime 08:58，早于升级），54 条任务未被改动；**尚未备份**，见「遗留风险」 |
+| `schedule-remote-host-tasks` | Schedule 域**写 v2、读 v1**；存储布局不变；**首次成功的 v2 写会把 unit 标成 v2，之后 v1 二进制拒绝打开**，降级必须恢复备份 | 本机 `~/.dsh/storages/schedule.json` 仍为 v1（mtime 08:58，早于升级），54 条任务未被改动；**已备份**为 `schedule.json.v1-backup`（2026-11-02 10:19，sha256 `f8fd0dd7…`，与原文逐字节一致） |
 | `sdk-run-commands` | SDK `run()` 接受原生命令输入并始终返回 `RunResult` | 本机插件不涉及 SDK run，无影响 |
 | `llm-request-purpose-declarations` | 辅助 LLM 请求的 `purpose` 改为声明合并，`compaction`/`session-title` 不再由共享包声明 | 本机插件不构造辅助 LLM 请求，无影响 |
 | `forge-git-permissions` | Forge Git 查询改用 Session 沙箱权限、禁用配置的 diff helper | 本机插件不调用 Forge Git，无影响 |
@@ -128,7 +128,7 @@ git am <本目录>/0001-feat-agent-team-spawn-model-and-web-master-ce7073d.patch
 
 ## 遗留风险
 
-1. **Schedule 存储 v1→v2**：`~/.dsh/storages/schedule.json` 目前仍是 v1、未被本轮写动；**首次 v2 写后旧二进制将拒绝打开**。建议在任何 schedule 写操作前先 `cp schedule.json schedule.json.v1-backup`。
+1. **Schedule 存储 v1→v2**：`~/.dsh/storages/schedule.json` 目前仍是 v1、未被本轮写动；**首次 v2 写后旧二进制将拒绝打开**。已于 2026-11-02 10:19 备份为 `~/.dsh/storages/schedule.json.v1-backup`（1.24 MB，sha256 `f8fd0dd79db2e5a8f7b5ae926fe87a9eaeeb8b9fa9b1ee2fd371fb322835aa65`，与备份时原文一致）；需要降级到 v1 二进制时用它恢复。
 2. **旧定时任务仍在**：54 条 v1 任务保留原有时机与投递目标；其中指向旧会话的任务仍会向旧会话投递，是否清理需单独判断。
 3. **`api.deepseek.com` 模型列表不可达**：启动日志有 `[llm-deepseek-account] model listing ... failed; using the bundled catalog`，非致命（用内置目录），但模型清单可能不是最新。
 4. **客户端插件仅静态验证**：13/13 `import` 成功只证明模块可加载；`dsh-client-*` 插件真正生效需在 Web UI 操作验证（参见 `reference_dsh_plugin_shadow_verification` 的假阳性教训）。
