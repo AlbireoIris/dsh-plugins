@@ -1,0 +1,177 @@
+From 7c28adbd28d23aad20a703ebe3bfa250e25fd41c Mon Sep 17 00:00:00 2001
+From: zhululin1 <zhululin1@xiaomi.com>
+Date: Thu, 5 Nov 2026 17:29:23 +0800
+Subject: [PATCH] =?UTF-8?q?feat(ui-subagent):=20=E7=9B=AE=E5=BD=95?=
+ =?UTF-8?q?=E8=A1=8C=E6=8C=89=E6=9C=80=E6=96=B0=E5=88=9B=E5=BB=BA=E4=BC=98?=
+ =?UTF-8?q?=E5=85=88?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- 反转只加在 CatalogRows 呈现层：持久化列表按创建时间升序到达，目录树以反转顺序呈现
+- 同步调整键盘导航与行顺序相关测试期望，并新增 newest-first 回归用例
+- 中英 README 与 i18n 配对同步
+---
+ packages/client/ui-subagent/README.i18n.yaml  |  4 +--
+ packages/client/ui-subagent/README.md         |  2 +-
+ packages/client/ui-subagent/README.zh.md      |  2 +-
+ .../src/client/SubagentHeaderLineage.tsx      |  8 +++--
+ .../tests/conversation-ui.client.spec.tsx     | 31 ++++++++++++++-----
+ 5 files changed, 33 insertions(+), 14 deletions(-)
+
+diff --git a/packages/client/ui-subagent/README.i18n.yaml b/packages/client/ui-subagent/README.i18n.yaml
+index 32d15ae638..d288d8b8ca 100644
+--- a/packages/client/ui-subagent/README.i18n.yaml
++++ b/packages/client/ui-subagent/README.i18n.yaml
+@@ -18,8 +18,8 @@
+   en: bc1c5164849937a8
+   zh: e03adf54d2d5a668
+ /deepseek-ai-dsh-client-ui-subagent/use-this-package/browsing-the-tree:
+-  en: 5ea28139189887e9
+-  zh: f5a51f041c39b0fa
++  en: de2b0f69bb351b2a
++  zh: eec4a41bed9ab08b
+ /deepseek-ai-dsh-client-ui-subagent/use-this-package/continuing-a-conversation:
+   en: e4ec261d3b122eb5
+   zh: 320bb2efc93dccdc
+diff --git a/packages/client/ui-subagent/README.md b/packages/client/ui-subagent/README.md
+index 764025ddfa..5922633db8 100644
+--- a/packages/client/ui-subagent/README.md
++++ b/packages/client/ui-subagent/README.md
+@@ -39,7 +39,7 @@ The wide root count trigger shows a 14px Users icon in its 14px slot when no chi
+ 
+ Count, owner, and sidebar-action tooltips appear after 500ms of hover. Hovering a text-visible trigger opens its catalog after 150ms; leaving both trigger and catalog closes it after 120ms. Clicking the descendant-count trigger opens and pins its catalog, or closes an already pinned catalog. The icon-only count trigger does not open on hover, including when a pending hover crosses into the narrow layout. Clicking toggles its pinned menu; ArrowDown opens and pins the menu and focuses its first row. Outside click or Escape dismisses a pinned menu. Clicking moves focus into the panel, where ArrowDown/Home enters the first tree row and ArrowUp/End enters the last; Escape returns focus when it was inside. Breadcrumb-title clicks navigate to the corresponding conversation.
+ 
+-Rows show the creation description, or an available Session title, above the agent name, which is unique among its siblings. Entries recorded without a name show the Session id in its place. Without either description, the row shows only the name or Session id. Navigation, row identity, and Sidebar addresses always use the Session id. Local rows use compact 4px vertical padding; their clickable content uses 6px horizontal padding and 7px gaps, aligned with shared-task rows while retaining the tree's left offset. A decorative trailing check marks the current conversation and is not an action; other local rows retain the sidebar arrow. Primary titles use 13px text and secondary names use 12px. All rows wrap descriptions and names in full, including on touch screens. Running uses the shared ongoing loader, an inactive child whose latest closed turn completed normally uses the shared success dot, and other inactive children use the shared idle dot. Every row reserves the same 14px status column, centering smaller dots so titles align with the loader state. The text-visible header trigger vertically centers its activity glyph and count with a 4px gap. The trailing column stacks total durable provider usage above active-turn duration. Keyboard navigation works with ArrowRight/ArrowLeft to expand and collapse branches and ArrowUp/ArrowDown, Home, End, and Escape to navigate or close the tree. An unlabeled one-shot row falls back to its session id. A row is a known leaf only after its own catalog loads empty.
++Rows appear newest-created first at every level: the durable listing arrives creation-ascending and the tree presents it reversed. Rows show the creation description, or an available Session title, above the agent name, which is unique among its siblings. Entries recorded without a name show the Session id in its place. Without either description, the row shows only the name or Session id. Navigation, row identity, and Sidebar addresses always use the Session id. Local rows use compact 4px vertical padding; their clickable content uses 6px horizontal padding and 7px gaps, aligned with shared-task rows while retaining the tree's left offset. A decorative trailing check marks the current conversation and is not an action; other local rows retain the sidebar arrow. Primary titles use 13px text and secondary names use 12px. All rows wrap descriptions and names in full, including on touch screens. Running uses the shared ongoing loader, an inactive child whose latest closed turn completed normally uses the shared success dot, and other inactive children use the shared idle dot. Every row reserves the same 14px status column, centering smaller dots so titles align with the loader state. The text-visible header trigger vertically centers its activity glyph and count with a 4px gap. The trailing column stacks total durable provider usage above active-turn duration. Keyboard navigation works with ArrowRight/ArrowLeft to expand and collapse branches and ArrowUp/ArrowDown, Home, End, and Escape to navigate or close the tree. An unlabeled one-shot row falls back to its session id. A row is a known leaf only after its own catalog loads empty.
+ 
+ ### Continuing a conversation
+ 
+diff --git a/packages/client/ui-subagent/README.zh.md b/packages/client/ui-subagent/README.zh.md
+index 52d9abc110..57216ba31f 100644
+--- a/packages/client/ui-subagent/README.zh.md
++++ b/packages/client/ui-subagent/README.zh.md
+@@ -39,7 +39,7 @@ kind: "package-reference"
+ 
+ 数量、负责人及侧边栏操作的工具提示在悬停 500ms 后显示。悬停文字可见的触发器 150ms 后打开目录；指针离开触发器和目录后，经过 120ms 关闭。点击后代数量触发器会打开并固定目录，或关闭已固定的目录。纯图标数量触发器不会因悬停而打开，包括等待悬停打开期间切换到窄布局的情况。点击可切换固定菜单的开关状态；ArrowDown 会打开并固定菜单，并将焦点移至首行。点击外部或按 Escape 可关闭已固定的菜单。点击会将焦点移入面板，此时 ArrowDown/Home 进入首个树行，ArrowUp/End 进入最后一个树行；Escape 在焦点原本位于面板内时将其送回。点击面包屑标题会导航至对应会话。
+ 
+-目录行在智能体名称上方显示创建描述，缺少创建描述时使用可用的 Session title；名称在同级子智能体中唯一。没有名称的历史目录项在相同位置显示 Session id。两者均缺少时，该行仅显示名称或 Session id。导航、行身份与 Sidebar 地址始终使用 Session id。本地行使用紧凑的 4px 垂直内边距；可点击内容使用 6px 水平内边距和 7px 间距，与共享任务行对齐，同时保留树的左侧偏移。当前对话在行尾显示装饰性对勾，该对勾不是操作控件；其他本地行保留侧边栏箭头。主标题使用 13px 文字，次级名称使用 12px。所有行均将描述与名称换行完整展示，包括在触屏上。running 使用共享 ongoing loading，最近一个已结束轮次正常完成的 inactive child 使用共享 success 绿点，其他 inactive child 使用共享 idle 灰点。每行都为状态图标预留相同的 14px 列宽，并将较小的圆点居中，使 title 与 loading 状态对齐。文字可见的页头触发器会垂直居中活动图标与数量，并保留 4px 水平间距。尾随列在上行显示提供方的持久化 token 用量总计，在下行显示活跃轮次耗时。键盘导航：ArrowRight/ArrowLeft 展开和折叠分支；ArrowUp/ArrowDown、Home、End 与 Escape 用于导航或关闭树。没有 label 的 one-shot 行回退到其会话 id。只有一行自身的目录加载为空后，它才是已知叶子。
++目录行在每一层级都按创建时间从新到旧排列：持久化列表按创建时间升序到达，目录树以反转顺序呈现。目录行在智能体名称上方显示创建描述，缺少创建描述时使用可用的 Session title；名称在同级子智能体中唯一。没有名称的历史目录项在相同位置显示 Session id。两者均缺少时，该行仅显示名称或 Session id。导航、行身份与 Sidebar 地址始终使用 Session id。本地行使用紧凑的 4px 垂直内边距；可点击内容使用 6px 水平内边距和 7px 间距，与共享任务行对齐，同时保留树的左侧偏移。当前对话在行尾显示装饰性对勾，该对勾不是操作控件；其他本地行保留侧边栏箭头。主标题使用 13px 文字，次级名称使用 12px。所有行均将描述与名称换行完整展示，包括在触屏上。running 使用共享 ongoing loading，最近一个已结束轮次正常完成的 inactive child 使用共享 success 绿点，其他 inactive child 使用共享 idle 灰点。每行都为状态图标预留相同的 14px 列宽，并将较小的圆点居中，使 title 与 loading 状态对齐。文字可见的页头触发器会垂直居中活动图标与数量，并保留 4px 水平间距。尾随列在上行显示提供方的持久化 token 用量总计，在下行显示活跃轮次耗时。键盘导航：ArrowRight/ArrowLeft 展开和折叠分支；ArrowUp/ArrowDown、Home、End 与 Escape 用于导航或关闭树。没有 label 的 one-shot 行回退到其会话 id。只有一行自身的目录加载为空后，它才是已知叶子。
+ 
+ ### 续接对话
+ 
+diff --git a/packages/client/ui-subagent/src/client/SubagentHeaderLineage.tsx b/packages/client/ui-subagent/src/client/SubagentHeaderLineage.tsx
+index 92a802ac66..316daa330a 100644
+--- a/packages/client/ui-subagent/src/client/SubagentHeaderLineage.tsx
++++ b/packages/client/ui-subagent/src/client/SubagentHeaderLineage.tsx
+@@ -239,7 +239,7 @@ function catalogProgress(entries: SubagentCatalogSnapshot['entries'], summaries:
+   ].join('\u2002·\u2002')
+ }
+ 
+-/** Render one catalog level and recurse only through explicitly expanded rows. */
++/** Render one catalog level, newest child first, recursing only through explicitly expanded rows. */
+ function CatalogRows({
+   parentSessionId, currentSessionId, catalog, catalogs, summaries, expanded, level,
+   openChild, openChildAside, refreshProjection, toggleBranch, closeCatalog, t,
+@@ -256,6 +256,10 @@ function CatalogRows({
+     entry.mode !== 'external' && !isKnownLeaf(catalogs[entry.id])
+     && summaries[entry.id]?.formatStatus !== 'migration-required'
+     && catalogs[entry.id]?.state !== 'migration-required')
++  // The durable listing contract orders entries by creation time ascending
++  // (SubagentListEntry); the catalog presents that order reversed, so the
++  // newest child leads every level.
++  const rows = catalog.entries.toReversed()
+   return (
+     <>
+       {emptyLoading && (
+@@ -274,7 +278,7 @@ function CatalogRows({
+           </button>
+         </div>
+       )}
+-      {catalog.entries.map((entry) => {
++      {rows.map((entry) => {
+         const external = entry.mode === 'external'
+         const childCatalog = catalogs[entry.id]
+         const isCurrent = entry.id === currentSessionId
+diff --git a/packages/client/ui-subagent/tests/conversation-ui.client.spec.tsx b/packages/client/ui-subagent/tests/conversation-ui.client.spec.tsx
+index 43d2255936..cef0d6c408 100644
+--- a/packages/client/ui-subagent/tests/conversation-ui.client.spec.tsx
++++ b/packages/client/ui-subagent/tests/conversation-ui.client.spec.tsx
+@@ -547,6 +547,21 @@ describe('SubagentHeaderLineage', () => {
+     })
+   })
+ 
++  it('renders catalog rows newest-created first', () => {
++    // The durable listing arrives ordered by creation time ascending; the
++    // catalog must present that order reversed at every level.
++    const entries = [
++      { id: 'oldest' as SessionId, mode: 'continuable' as const, label: 'oldest', activity: 'inactive' as const },
++      { id: 'middle' as SessionId, mode: 'one-shot' as const, label: 'middle', activity: 'inactive' as const },
++      { id: 'newest' as SessionId, mode: 'one-shot' as const, label: 'newest', activity: 'inactive' as const },
++    ]
++    render(<HeaderCatalog {...props(catalog({ entries }))} />)
++    hoverCatalog(screen.getByRole('button', { name: /3 个子智能体/ }))
++
++    const labels = screen.getAllByRole('treeitem').map(row => row.getAttribute('aria-label'))
++    expect(labels.map(label => label?.split(' ')[0])).toEqual(['newest', 'middle', 'oldest'])
++  })
++
+   it('selects singular count keys for one direct child', () => {
+     const base = props(catalog({
+       entries: [{
+@@ -608,13 +623,13 @@ describe('SubagentHeaderLineage', () => {
+     trigger.querySelector<HTMLElement>('[data-subagent-count]')!.style.display = 'none'
+     fireEvent.keyDown(trigger, { key: 'ArrowDown' })
+     await Promise.resolve()
+-    const firstRow = screen.getByRole('treeitem', { name: /worker/u })
++    const firstRow = screen.getByRole('treeitem', { name: /reviewer/u })
+     expect(document.activeElement).toBe(firstRow)
+     fireEvent.pointerLeave(trigger.parentElement!)
+     fireEvent.pointerLeave(screen.getByRole('dialog'))
+     await act(async () => { await vi.advanceTimersByTimeAsync(500) })
+     expect(document.activeElement).toBe(firstRow)
+-    expect(screen.getByRole('treeitem', { name: /worker/u })).toBe(firstRow)
++    expect(screen.getByRole('treeitem', { name: /reviewer/u })).toBe(firstRow)
+     fireEvent.keyDown(firstRow, { key: 'Escape' })
+     await Promise.resolve()
+     expect(screen.queryByRole('dialog')).toBeNull()
+@@ -741,7 +756,7 @@ describe('SubagentHeaderLineage', () => {
+   })
+ 
+   it.each([
+-    ['ArrowDown', /worker/], ['Home', /worker/], ['ArrowUp', /reviewer/], ['End', /reviewer/],
++    ['ArrowDown', /reviewer/], ['Home', /reviewer/], ['ArrowUp', /worker/], ['End', /worker/],
+   ] as const)('enters the tree with %s after clicking the trigger', async (key, name) => {
+     render(<HeaderCatalog {...props(catalog())} />)
+     fireEvent.click(screen.getByRole('button', { name: /\d+ 个子智能体$/ }))
+@@ -757,14 +772,14 @@ describe('SubagentHeaderLineage', () => {
+     const trigger = screen.getByRole('button', { name: /\d+ 个子智能体$/ })
+     fireEvent.keyDown(trigger, { key: 'ArrowDown' })
+     await Promise.resolve()
+-    expect(document.activeElement).toBe(screen.getByRole('treeitem', { name: /worker/ }))
++    expect(document.activeElement).toBe(screen.getByRole('treeitem', { name: /reviewer/ }))
+ 
+     fireEvent.keyDown(document.activeElement as Element, { key: 'End' })
+-    expect(document.activeElement).toBe(screen.getByRole('treeitem', { name: /reviewer/ }))
+-    fireEvent.keyDown(document.activeElement as Element, { key: 'Home' })
+     expect(document.activeElement).toBe(screen.getByRole('treeitem', { name: /worker/ }))
+-    fireEvent.keyDown(document.activeElement as Element, { key: 'ArrowUp' })
++    fireEvent.keyDown(document.activeElement as Element, { key: 'Home' })
+     expect(document.activeElement).toBe(screen.getByRole('treeitem', { name: /reviewer/ }))
++    fireEvent.keyDown(document.activeElement as Element, { key: 'ArrowUp' })
++    expect(document.activeElement).toBe(screen.getByRole('treeitem', { name: /worker/ }))
+     fireEvent.keyDown(document.activeElement as Element, { key: 'Escape' })
+     await Promise.resolve()
+     expect(screen.queryByRole('tree')).toBeNull()
+@@ -1490,7 +1505,7 @@ describe('SubagentHeaderLineage', () => {
+     const trigger = screen.getByRole('button', { name: /\d+ 个子智能体$/ })
+     hoverCatalog(trigger)
+     fireEvent.keyDown(screen.getByRole('tree'), { key: 'ArrowUp' })
+-    expect(document.activeElement).toBe(screen.getByRole('treeitem', { name: /reviewer/ }))
++    expect(document.activeElement).toBe(screen.getByRole('treeitem', { name: /worker/ }))
+     fireEvent.keyDown(trigger, { key: 'ArrowDown' })
+     view.unmount()
+     await Promise.resolve()
+-- 
+2.43.0
+
