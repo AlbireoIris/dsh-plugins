@@ -147,7 +147,7 @@ git am <本目录>/0001-feat-ui-subagent.patch
 2. **补丁能力只验到产物层**：`toReversed` 只在构建产物里确认了一处，没在 Web UI 里肉眼确认「最新在最上」。客户端插件/呈现类改动的静态验证有假阳性先例（见 `reference_dsh_plugin_shadow_verification`）。
 3. **`api.deepseek.com` 不可达**：模型清单用内置 catalog，可能不是最新。
 4. **13/13 插件只证明模块可读**：`dsh-client-*` 插件真正生效仍需 Web UI 操作验证。
-5. **worktree 未清理**：`/home/mi/ssd/dsh-rc1-build` 还在，确认无残留价值后可 `git worktree remove`。
+5. **worktree 已清理**：`/home/mi/ssd/dsh-rc1-build` 已于 2026-11-05 用 `git worktree remove` 删除（删除前确认 HEAD 与主仓库一致、无未提交/未跟踪文件，释放 2.6 GB）。
 
 ## 维护：在新上游版本上重放
 
