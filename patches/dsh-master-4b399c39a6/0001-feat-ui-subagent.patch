@@ -1,0 +1,181 @@
+From f58800e328c3557fe35767a579e0181f3c56c049 Mon Sep 17 00:00:00 2001
+From: zhululin1 <zhululin1@xiaomi.com>
+Date: Thu, 5 Nov 2026 17:29:23 +0800
+Subject: [PATCH] =?UTF-8?q?feat(ui-subagent):=20=E7=9B=AE=E5=BD=95?=
+ =?UTF-8?q?=E8=A1=8C=E6=8C=89=E6=9C=80=E6=96=B0=E5=88=9B=E5=BB=BA=E4=BC=98?=
+ =?UTF-8?q?=E5=85=88?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- 反转加在 CatalogRows 呈现层：持久化列表按创建时间升序到达，目录树以反转顺序呈现
+- 会话面板根层已由 sectionOrder 按活动与更新时间排序，改用 orderedRoot 告知目录树不要二次反转
+- 新增切换器 newest-first 回归用例，并按上游新排序调整键盘导航与行顺序相关期望
+- 中英 README 与 i18n 配对同步
+---
+ packages/client/ui-subagent/README.i18n.yaml  |  4 ++--
+ packages/client/ui-subagent/README.md         |  2 +-
+ packages/client/ui-subagent/README.zh.md      |  2 +-
+ .../src/client/SubagentCatalog.tsx            | 17 ++++++++++++----
+ .../src/client/SubagentsSection.tsx           |  1 +
+ .../tests/conversation-ui.client.spec.tsx     | 20 +++++++++++++++++++
+ 6 files changed, 38 insertions(+), 8 deletions(-)
+
+diff --git a/packages/client/ui-subagent/README.i18n.yaml b/packages/client/ui-subagent/README.i18n.yaml
+index 6fc2584f08..29183d822c 100644
+--- a/packages/client/ui-subagent/README.i18n.yaml
++++ b/packages/client/ui-subagent/README.i18n.yaml
+@@ -18,8 +18,8 @@
+   en: f84d90b7cbf653e5
+   zh: e49313ff82710c2f
+ /deepseek-ai-dsh-client-ui-subagent/use-this-package/browsing-the-tree:
+-  en: da87d582146106c4
+-  zh: f640b3a3fcc11209
++  en: 7353f96211365740
++  zh: f9eb90b0aad83d9b
+ /deepseek-ai-dsh-client-ui-subagent/use-this-package/continuing-a-conversation:
+   en: e4ec261d3b122eb5
+   zh: 320bb2efc93dccdc
+diff --git a/packages/client/ui-subagent/README.md b/packages/client/ui-subagent/README.md
+index 3148c77be9..4e5d887932 100644
+--- a/packages/client/ui-subagent/README.md
++++ b/packages/client/ui-subagent/README.md
+@@ -41,7 +41,7 @@ The switcher title is at most 244px wide, ellipsizes, and is followed by an up-d
+ 
+ The sidebar-action tooltip appears after 500ms of hover. Hovering a switcher with a non-touch pointer opens its menu after 150ms; leaving both the switcher and its menu closes it after 120ms. Clicking the current Session's title opens and pins the menu and moves focus into it, and a pinned menu ignores pointer leave; clicking an ancestor's title navigates to that ancestor instead. ArrowDown on a switcher opens its menu and focuses the first row; on an open menu it moves focus into the menu, to the first row once the rows have loaded. An outside press or Escape closes the menu, and Escape returns focus to the switcher when focus was inside the menu.
+ 
+-Rows show the creation description, or an available Session title, with the agent name, which is unique among its siblings: in switcher menus the name sits below the title, and in the Session panel each row is one 28px line whose hover card, after 500ms of hover, shows the title, the name as its owner, the activity with the mode, and the token total and exact duration. Entries recorded without a name show the Session id in its place. Without either description, the row shows only the name or Session id. Navigation, row identity, and Sidebar addresses always use the Session id. Local rows use compact 4px vertical padding. In the Session panel they follow the panel's columns: the status glyph's center 14px from the row start, titles at 30px, and the sidebar arrow's center 14px from the row end. In switcher menus, their clickable content uses 6px horizontal padding and 7px gaps while retaining the tree's left offset. A decorative trailing check marks the current conversation and is not an action; other local rows retain the sidebar arrow, a 24px target whose glyph darkens on hover without a fill in the panel and in switcher menus alike. Primary titles use 13px text and secondary names use 12px. Switcher rows wrap descriptions and names in full, including on touch screens; panel titles clip with an ellipsis, and the row's accessible name keeps the name, mode, activity, and measures. Running uses the shared ongoing loader, an inactive child whose latest closed turn completed normally uses the shared success dot, and other inactive children use the shared idle dot. Every row reserves the same status column, 16px in the panel and 14px in switcher menus, centering smaller dots so titles align with the loader state. In switcher menus the trailing column stacks total durable provider usage above active-turn duration; panel rows show only the compact duration, in 12px text. In the tree, Enter or Space opens the focused row, ArrowRight/ArrowLeft expand and collapse branches, and ArrowUp/ArrowDown, Home, and End move between rows. An unlabeled one-shot row falls back to its session id. Only rows with confirmed children show an expansion arrow. Preparing a level reads its catalog and its direct children sequentially through the existing projection reader, which reuses completed reads and merges in-flight requests; it does not recursively discover deeper descendants. Once started, a level read may finish after the panel hides or the menu closes. Missing catalogs show no expansion arrow or unknown marker; shared projection updates reveal confirmed branches while preserving the agent activity marker. Failed reads keep navigation available and offer Retry.
++Switcher menus list the newest-created child first at every level, and so does every expanded branch in the Session panel; the panel's own list keeps running subagents first by latest turn start and the rest by latest update. Rows show the creation description, or an available Session title, with the agent name, which is unique among its siblings: in switcher menus the name sits below the title, and in the Session panel each row is one 28px line whose hover card, after 500ms of hover, shows the title, the name as its owner, the activity with the mode, and the token total and exact duration. Entries recorded without a name show the Session id in its place. Without either description, the row shows only the name or Session id. Navigation, row identity, and Sidebar addresses always use the Session id. Local rows use compact 4px vertical padding. In the Session panel they follow the panel's columns: the status glyph's center 14px from the row start, titles at 30px, and the sidebar arrow's center 14px from the row end. In switcher menus, their clickable content uses 6px horizontal padding and 7px gaps while retaining the tree's left offset. A decorative trailing check marks the current conversation and is not an action; other local rows retain the sidebar arrow, a 24px target whose glyph darkens on hover without a fill in the panel and in switcher menus alike. Primary titles use 13px text and secondary names use 12px. Switcher rows wrap descriptions and names in full, including on touch screens; panel titles clip with an ellipsis, and the row's accessible name keeps the name, mode, activity, and measures. Running uses the shared ongoing loader, an inactive child whose latest closed turn completed normally uses the shared success dot, and other inactive children use the shared idle dot. Every row reserves the same status column, 16px in the panel and 14px in switcher menus, centering smaller dots so titles align with the loader state. In switcher menus the trailing column stacks total durable provider usage above active-turn duration; panel rows show only the compact duration, in 12px text. In the tree, Enter or Space opens the focused row, ArrowRight/ArrowLeft expand and collapse branches, and ArrowUp/ArrowDown, Home, and End move between rows. An unlabeled one-shot row falls back to its session id. Only rows with confirmed children show an expansion arrow. Preparing a level reads its catalog and its direct children sequentially through the existing projection reader, which reuses completed reads and merges in-flight requests; it does not recursively discover deeper descendants. Once started, a level read may finish after the panel hides or the menu closes. Missing catalogs show no expansion arrow or unknown marker; shared projection updates reveal confirmed branches while preserving the agent activity marker. Failed reads keep navigation available and offer Retry.
+ 
+ ### Continuing a conversation
+ 
+diff --git a/packages/client/ui-subagent/README.zh.md b/packages/client/ui-subagent/README.zh.md
+index dfe63ced3c..153ea2f179 100644
+--- a/packages/client/ui-subagent/README.zh.md
++++ b/packages/client/ui-subagent/README.zh.md
+@@ -41,7 +41,7 @@ kind: "package-reference"
+ 
+ 侧边栏操作的工具提示在悬停 500ms 后显示。非触摸指针悬停切换器 150ms 后打开其菜单；指针离开切换器和菜单后，经过 120ms 关闭。点击当前 Session 的标题会打开并固定菜单，并将焦点移入菜单，已固定的菜单不因指针离开而关闭；点击祖先标题则导航至该祖先。在切换器上按 ArrowDown 会打开菜单，并将焦点移至首行；菜单已打开时，焦点移入菜单，行加载完成后移至首行。点击外部或按 Escape 可关闭菜单；焦点原本位于菜单内时，Escape 将焦点送回切换器。
+ 
+-目录行显示创建描述（缺少时使用可用的 Session title）和智能体名称，名称在同级子智能体中唯一：切换器菜单中名称位于标题下方；会话面板中每行只占 28px 一行，悬停 500ms 后的悬停卡片显示标题、作为负责人的名称、活动状态与模式，以及 token 总计和精确耗时。没有名称的历史目录项在相同位置显示 Session id。两者均缺少时，该行仅显示名称或 Session id。导航、行身份与 Sidebar 地址始终使用 Session id。本地行使用紧凑的 4px 垂直内边距。在会话面板中，它们遵循面板的列：状态图标中心距行起始 14px，标题从 30px 开始，侧边栏箭头中心距行末端 14px。在切换器菜单中，可点击内容使用 6px 水平内边距和 7px 间距，同时保留树的左侧偏移。当前对话在行尾显示装饰性对勾，该对勾不是操作控件；其他本地行保留侧边栏箭头：点击区域 24px，在面板和切换器菜单中都是悬停时箭头变深、没有底色。主标题使用 13px 文字，次级名称使用 12px。切换器菜单中的行将描述与名称换行完整展示，包括在触屏上；面板中的标题以省略号截断，行的无障碍名称仍包含名称、模式、活动状态与度量。running 使用共享 ongoing loading，最近一个已结束轮次正常完成的 inactive child 使用共享 success 绿点，其他 inactive child 使用共享 idle 灰点。每行都为状态图标预留相同的列宽（面板中 16px，切换器菜单中 14px），并将较小的圆点居中，使 title 与 loading 状态对齐。切换器菜单中，尾随列在上行显示提供方的持久化 token 用量总计，在下行显示活跃轮次耗时；面板中的行只以 12px 文字显示简短耗时。在目录树中，Enter 或 Space 打开获得焦点的行，ArrowRight/ArrowLeft 展开和折叠分支，ArrowUp/ArrowDown、Home 与 End 在行间移动。没有 label 的 one-shot 行回退到其会话 id。只有确认存在下级的行才显示展开箭头。准备一层时，通过现有投影读取器依次读取其目录及直接子节点的目录，复用已完成的读取并合并进行中的请求，不递归发现更深层后代。已开始的单层读取可能在面板隐藏或菜单关闭后完成。缺少目录的行不显示展开箭头或未知标记；共享投影更新确认存在下级后显示箭头，并保持 agent 活动状态图标。读取失败时保留导航操作并提供重试。
++切换器菜单在每一层级都按创建时间从新到旧排列，会话面板中展开的分支同样如此；面板自身的列表则把运行中的子智能体按轮次开始时间从新到旧排在前面，其余按最近更新时间从新到旧排列。目录行显示创建描述（缺少时使用可用的 Session title）和智能体名称，名称在同级子智能体中唯一：切换器菜单中名称位于标题下方；会话面板中每行只占 28px 一行，悬停 500ms 后的悬停卡片显示标题、作为负责人的名称、活动状态与模式，以及 token 总计和精确耗时。没有名称的历史目录项在相同位置显示 Session id。两者均缺少时，该行仅显示名称或 Session id。导航、行身份与 Sidebar 地址始终使用 Session id。本地行使用紧凑的 4px 垂直内边距。在会话面板中，它们遵循面板的列：状态图标中心距行起始 14px，标题从 30px 开始，侧边栏箭头中心距行末端 14px。在切换器菜单中，可点击内容使用 6px 水平内边距和 7px 间距，同时保留树的左侧偏移。当前对话在行尾显示装饰性对勾，该对勾不是操作控件；其他本地行保留侧边栏箭头：点击区域 24px，在面板和切换器菜单中都是悬停时箭头变深、没有底色。主标题使用 13px 文字，次级名称使用 12px。切换器菜单中的行将描述与名称换行完整展示，包括在触屏上；面板中的标题以省略号截断，行的无障碍名称仍包含名称、模式、活动状态与度量。running 使用共享 ongoing loading，最近一个已结束轮次正常完成的 inactive child 使用共享 success 绿点，其他 inactive child 使用共享 idle 灰点。每行都为状态图标预留相同的列宽（面板中 16px，切换器菜单中 14px），并将较小的圆点居中，使 title 与 loading 状态对齐。切换器菜单中，尾随列在上行显示提供方的持久化 token 用量总计，在下行显示活跃轮次耗时；面板中的行只以 12px 文字显示简短耗时。在目录树中，Enter 或 Space 打开获得焦点的行，ArrowRight/ArrowLeft 展开和折叠分支，ArrowUp/ArrowDown、Home 与 End 在行间移动。没有 label 的 one-shot 行回退到其会话 id。只有确认存在下级的行才显示展开箭头。准备一层时，通过现有投影读取器依次读取其目录及直接子节点的目录，复用已完成的读取并合并进行中的请求，不递归发现更深层后代。已开始的单层读取可能在面板隐藏或菜单关闭后完成。缺少目录的行不显示展开箭头或未知标记；共享投影更新确认存在下级后显示箭头，并保持 agent 活动状态图标。读取失败时保留导航操作并提供重试。
+ 
+ ### 续接对话
+ 
+diff --git a/packages/client/ui-subagent/src/client/SubagentCatalog.tsx b/packages/client/ui-subagent/src/client/SubagentCatalog.tsx
+index ced031b05b..3e884e3336 100644
+--- a/packages/client/ui-subagent/src/client/SubagentCatalog.tsx
++++ b/packages/client/ui-subagent/src/client/SubagentCatalog.tsx
+@@ -41,6 +41,8 @@ interface CatalogRowsProps {
+   summaries: Readonly<Record<SessionId, SessionSummary>>
+   expanded: ReadonlySet<SessionId>
+   level: number
++  /** The caller already ordered this level's entries for display. */
++  ordered?: boolean
+   openChild: (address: SubagentAddress) => void
+   openChildAside: (address: SubagentAddress) => void
+   refreshProjection: (parentSessionId: SessionId) => void
+@@ -217,9 +219,9 @@ function catalogProgress(entries: SubagentCatalogSnapshot['entries'], summaries:
+   ].join('\u2002·\u2002')
+ }
+ 
+-/** Render one catalog level and recurse only through explicitly expanded rows. */
++/** Render one catalog level, newest child first unless the caller ordered it, recursing only through explicitly expanded rows. */
+ function CatalogRows({
+-  parentSessionId, currentSessionId, catalog, catalogs, summaries, expanded, level,
++  parentSessionId, currentSessionId, catalog, catalogs, summaries, expanded, level, ordered = false,
+   openChild, openChildAside, refreshProjection, toggleBranch, closeCatalog, panelDetails, t,
+ }: CatalogRowsProps & { t: TranslateNS<typeof NS> }) {
+   const dense = panelDetails !== undefined
+@@ -232,6 +234,10 @@ function CatalogRows({
+   }, [running])
+   const emptyLoading = catalog.state === 'loading' && catalog.entries.length === 0
+   const reserveDisclosure = catalog.entries.some(entry => canExpandCatalog(entry, catalogs, summaries))
++  // The durable listing contract orders entries by creation time ascending
++  // (SubagentListEntry), so the tree reverses it and the newest child leads.
++  // A caller that ordered its own level for display passes `ordered` instead.
++  const rows = ordered ? catalog.entries : catalog.entries.toReversed()
+   return (
+     <>
+       {catalog.state === 'idle' && catalog.entries.length === 0 && (
+@@ -253,7 +259,7 @@ function CatalogRows({
+           </button>
+         </div>
+       )}
+-      {catalog.entries.map((entry) => {
++      {rows.map((entry) => {
+         const external = entry.mode === 'external'
+         const childCatalog = catalogs[entry.id]
+         const isCurrent = entry.id === currentSessionId
+@@ -519,6 +525,8 @@ export interface CatalogTreeProps {
+   onOpened: () => void
+   /** Focus the first row on mount, as a keyboard-opened popover does. */
+   focusFirst?: boolean
++  /** `catalog.entries` already arrive in the root level's display order. */
++  orderedRoot?: boolean
+   /**
+    * Renders the Session panel's row details. With it the tree lists one-line
+    * rows, as the Session panel does, and each row shows its name, owner,
+@@ -537,7 +545,7 @@ export interface CatalogTreeProps {
+  */
+ export function CatalogTree({
+   rootSessionId, currentSessionId, catalog, catalogs, summaries,
+-  openChild, openChildAside, prepareLevel, onOpened, focusFirst = false, panelDetails, t,
++  openChild, openChildAside, prepareLevel, onOpened, focusFirst = false, orderedRoot = false, panelDetails, t,
+ }: CatalogTreeProps) {
+   const [expanded, setExpanded] = useState<ReadonlySet<SessionId>>(() => new Set())
+   const treeRef = useRef<HTMLDivElement>(null)
+@@ -589,6 +597,7 @@ export function CatalogTree({
+         summaries={summaries}
+         expanded={expanded}
+         level={1}
++        ordered={orderedRoot}
+         openChild={openChild}
+         openChildAside={openChildAside}
+         refreshProjection={prepareLevel}
+diff --git a/packages/client/ui-subagent/src/client/SubagentsSection.tsx b/packages/client/ui-subagent/src/client/SubagentsSection.tsx
+index deb1492470..cdd1c311fb 100644
+--- a/packages/client/ui-subagent/src/client/SubagentsSection.tsx
++++ b/packages/client/ui-subagent/src/client/SubagentsSection.tsx
+@@ -125,6 +125,7 @@ export function SubagentsSection({
+           openChildAside={openChildAside}
+           prepareLevel={prepareLevel}
+           onOpened={dismissOverlay}
++          orderedRoot
+           panelDetails={panelDetails}
+           t={t}
+         />
+diff --git a/packages/client/ui-subagent/tests/conversation-ui.client.spec.tsx b/packages/client/ui-subagent/tests/conversation-ui.client.spec.tsx
+index a13821a1c8..4c2070cecd 100644
+--- a/packages/client/ui-subagent/tests/conversation-ui.client.spec.tsx
++++ b/packages/client/ui-subagent/tests/conversation-ui.client.spec.tsx
+@@ -242,6 +242,26 @@ function Section({ store, dismissOverlay, ...props }: Omit<HeaderCatalogProps, '
+ 
+ describe('SubagentHeaderLineage', () => {
+ 
++  it('opens the breadcrumb switcher newest-created first', () => {
++    // The durable listing arrives creation-ascending; the switcher presents that order reversed.
++    const entries = [
++      { id: 'oldest' as SessionId, mode: 'continuable' as const, label: 'oldest', activity: 'inactive' as const },
++      { id: 'middle' as SessionId, mode: 'one-shot' as const, label: 'middle', activity: 'inactive' as const },
++      { id: 'newest' as SessionId, mode: 'one-shot' as const, label: 'newest', activity: 'inactive' as const },
++    ]
++    render(
++      <SubagentHeaderLineage
++        {...props(catalog({ entries }))}
++        lineageSessionId={'newest' as SessionId}
++        displayTitle="newest"
++      />,
++    )
++    hoverCatalog(screen.getByRole('button', { name: '切换子智能体：newest' }))
++
++    expect(screen.getAllByRole('treeitem').map(row => (row.getAttribute('aria-label') ?? '').split(' ')[0]))
++      .toEqual(['newest', 'middle', 'oldest'])
++  })
++
+   it('omits section headings from a catalog of members', () => {
+     render(<HeaderCatalog {...props(catalog())} />)
+     expect(screen.getByRole('tree')).toBeTruthy()
+-- 
+2.43.0
+
